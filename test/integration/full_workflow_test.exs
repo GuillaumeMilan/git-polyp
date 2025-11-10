@@ -81,7 +81,10 @@ defmodule GitPolyp.Integration.FullWorkflowTest do
       assert "Feature 3 commit D" in new_commit_messages
 
       # Verify the stack is still linear
-      {:ok, current_head} = get_branch_sha(repo, "feature-3")
+      # After rebase --onto with a commit SHA, we're in detached HEAD state
+      {current_head, 0} = System.cmd("git", ["rev-parse", "HEAD"], cd: repo)
+      current_head = String.trim(current_head)
+
       {parent1, 0} = System.cmd("git", ["rev-parse", "#{current_head}^"], cd: repo)
       {parent2, 0} = System.cmd("git", ["rev-parse", "#{String.trim(parent1)}^"], cd: repo)
       {parent3, 0} = System.cmd("git", ["rev-parse", "#{String.trim(parent2)}^"], cd: repo)
