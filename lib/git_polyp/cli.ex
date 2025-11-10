@@ -12,28 +12,38 @@ defmodule GitPolyp.CLI do
   Main entry point for the escript.
   """
   def main(argv) do
-    case argv do
-      [] ->
+    # Parse global options
+    {opts, remaining_args, invalid} =
+      OptionParser.parse(argv,
+        strict: [
+          help: :boolean,
+          version: :boolean
+        ],
+        aliases: [
+          h: :help,
+          v: :version
+        ]
+      )
+
+    cond do
+      opts[:help] ->
         print_help()
         exit_success()
 
-      ["--help"] ->
-        print_help()
-        exit_success()
-
-      ["-h"] ->
-        print_help()
-        exit_success()
-
-      ["--version"] ->
+      opts[:version] ->
         print_version()
         exit_success()
 
-      ["-v"] ->
-        print_version()
+      remaining_args == [] and invalid == [] ->
+        print_help()
         exit_success()
+      
+      remaining_args == [] and invalid != [] ->
+        # Handle invalid options for this command
+        exit_error("Invalid options: #{Enum.map(invalid, fn {opt, _} -> opt end) |> Enum.join(", ")}\n\n#{usage_hint()}")
 
-      _ ->
+      true ->
+        # Route with all args as invalid options might be for subcommands
         route_command(argv)
     end
   end

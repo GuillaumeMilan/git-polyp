@@ -83,22 +83,36 @@ defmodule GitPolyp.Git.StackBuilder do
 
   @doc """
   Formats a stack for display, showing branches and commit messages.
+
+  Format: * <short-commit-hash> - (<branches>) <commit-message>
+  - short-commit-hash in red
+  - branches in yellow
   """
   def format_stack(stack) do
     stack
-    |> Enum.with_index(1)
-    |> Enum.map(fn {entry, index} ->
-      branch_list =
+    |> Enum.map(fn entry ->
+      short_commit = String.slice(entry.commit, 0..8)
+
+      # Format commit hash in red
+      commit_colored = IO.ANSI.format([:red, short_commit, :reset]) |> IO.iodata_to_binary()
+
+      # Format branches in yellow
+      branches_colored =
         if Enum.empty?(entry.branches) do
-          "(no branches)"
+          ""
         else
-          Enum.join(entry.branches, ", ")
+          branch_list = Enum.join(entry.branches, ", ")
+          IO.ANSI.format([:yellow, "(", branch_list, ")", :reset]) |> IO.iodata_to_binary()
         end
 
-      short_commit = String.slice(entry.commit, 0..7)
       message_first_line = entry.message |> String.split("\n") |> List.first()
 
-      "  #{index}. [#{short_commit}] #{branch_list}\n     #{message_first_line}"
+      # Build the line with proper spacing
+      if branches_colored == "" do
+        "* #{commit_colored} - #{message_first_line}"
+      else
+        "* #{commit_colored} - #{branches_colored} #{message_first_line}"
+      end
     end)
     |> Enum.join("\n")
   end
