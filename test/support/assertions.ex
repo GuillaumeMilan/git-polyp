@@ -96,4 +96,11 @@ defmodule GitPolyp.Assertions do
     assert actual_branch == expected_branch,
       "Expected current branch to be '#{expected_branch}', but it is '#{actual_branch}'"
   end
+
+  @doc """
+  Strips ANSI escape codes from a string.
+  """
+  def strip_ansi(string) do
+    String.replace(string, ~r/\e\[[0-9;]*m/, "")
+  end
 end

@@ -269,6 +269,53 @@ defmodule GitPolyp.Commands.RebaseStack do
     end)
 
     IO.puts("")
+
+    # Only prompt for auto-push in production (not during tests)
+    if Mix.env() != :test do
+      if Prompt.confirm("Would you like to push all these branches now?") do
+        push_branches(updates)
+      else
+        IO.puts("You can push the branches manually later using the commands above.")
+      end
+    end
+  end
+
+  defp push_branches(updates) do
+    IO.puts("")
+    IO.puts(Formatter.info("Pushing branches..."))
+    IO.puts("")
+
+    results =
+      Enum.map(updates, fn update ->
+        IO.puts("Pushing #{Formatter.branch(update.branch)}...")
+
+        case Client.push_force_with_lease(update.branch) do
+          {:ok, _} ->
+            IO.puts(Formatter.success("  ✓ #{update.branch} pushed successfully"))
+            {:ok, update.branch}
+
+          {:error, %{message: message}} ->
+            IO.puts(Formatter.error("  ✗ Failed to push #{update.branch}: #{message}"))
+            {:error, update.branch, message}
+        end
+      end)
+
+    IO.puts("")
+
+    failures = Enum.filter(results, fn result -> match?({:error, _, _}, result) end)
+
+    if Enum.empty?(failures) do
+      IO.puts(Formatter.success("All branches pushed successfully!"))
+    else
+      IO.puts(Formatter.warning("Some branches failed to push:"))
+
+      Enum.each(failures, fn {:error, branch, _message} ->
+        IO.puts("  - #{branch}")
+      end)
+
+      IO.puts("")
+      IO.puts("You can retry pushing these branches manually.")
+    end
   end
 
   # Continue command implementation

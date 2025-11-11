@@ -213,6 +213,17 @@ defmodule GitPolyp.Git.Client do
     end
   end
 
+  @doc """
+  Pushes a branch to remote with --force-with-lease for safety.
+
+  ## Examples
+      iex> GitPolyp.Git.Client.push_force_with_lease("feature")
+      {:ok, ""}
+  """
+  def push_force_with_lease(branch, remote \\ "origin") do
+    git_cmd(["push", "--force-with-lease", remote, branch])
+  end
+
   # Private helper to execute git commands
   defp git_cmd(args) do
     case System.cmd("git", args, stderr_to_stdout: true) do

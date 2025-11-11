@@ -2,6 +2,7 @@ defmodule GitPolyp.Git.StackBuilderTest do
   use ExUnit.Case, async: true
 
   alias GitPolyp.Git.StackBuilder
+  import GitPolyp.Assertions
 
   describe "format_stack/1" do
     test "formats single stack entry correctly" do
@@ -123,16 +124,19 @@ defmodule GitPolyp.Git.StackBuilderTest do
 
       result = StackBuilder.format_stack(stack)
 
+      # Strip ANSI codes for testing
+      stripped = strip_ansi(result)
+
       # Verify structure - new format: * <hash> - (<branches>) <message>
-      assert result =~ "* a1b2c3d4e"
-      assert result =~ "feat-1"
-      assert result =~ "Add authentication"
-      assert result =~ "* f6e5d4c3b"
-      assert result =~ "Update tests"
-      assert result =~ "* 123456789"
-      assert result =~ "feat-2, dev"
-      assert result =~ "Fix bug"
-      refute result =~ "Additional details"
+      assert stripped =~ "* a1b2c3d4e"
+      assert stripped =~ "feat-1"
+      assert stripped =~ "Add authentication"
+      assert stripped =~ "* f6e5d4c3b"
+      assert stripped =~ "Update tests"
+      assert stripped =~ "* 123456789"
+      assert stripped =~ "feat-2, dev"
+      assert stripped =~ "Fix bug"
+      refute stripped =~ "Additional details"
     end
   end
 
