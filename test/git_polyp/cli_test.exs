@@ -77,7 +77,8 @@ defmodule GitPolyp.CLITest do
     test "shows error for typo in command name" do
       output =
         capture_io(:stderr, fn ->
-          catch_exit(CLI.main(["rebase-stck"]))  # typo
+          # typo
+          catch_exit(CLI.main(["rebase-stck"]))
         end)
 
       assert output =~ "Unknown command: rebase-stck"

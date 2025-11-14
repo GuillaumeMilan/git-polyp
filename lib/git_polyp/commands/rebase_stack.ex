@@ -40,7 +40,9 @@ defmodule GitPolyp.Commands.RebaseStack do
 
       not Enum.empty?(invalid) ->
         invalid_opts = Enum.map(invalid, fn {opt, _} -> opt end) |> Enum.join(", ")
-        {:error, "Unknown option: #{invalid_opts}\nRun 'git-polyp rebase-stack --help' for usage information."}
+
+        {:error,
+         "Unknown option: #{invalid_opts}\nRun 'git-polyp rebase-stack --help' for usage information."}
 
       opts[:continue] ->
         continue_rebase()
@@ -368,7 +370,9 @@ defmodule GitPolyp.Commands.RebaseStack do
     case Client.new_commits(metadata.target_branch, stack_length) do
       {:ok, new_commits} ->
         # Checkout base branch to avoid "branch is checked out" errors
-        IO.puts(Formatter.info("Switching to #{metadata.base_branch} to update branch pointers..."))
+        IO.puts(
+          Formatter.info("Switching to #{metadata.base_branch} to update branch pointers...")
+        )
 
         case Client.checkout(metadata.base_branch) do
           {:ok, _} ->

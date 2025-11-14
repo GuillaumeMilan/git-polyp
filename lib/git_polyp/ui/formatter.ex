@@ -58,6 +58,7 @@ defmodule GitPolyp.UI.Formatter do
   """
   def commit(sha) do
     short_sha = String.slice(sha, 0..7)
+
     IO.ANSI.format([:yellow, short_sha, :reset])
     |> IO.iodata_to_binary()
   end

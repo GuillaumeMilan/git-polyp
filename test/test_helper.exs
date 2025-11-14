@@ -1,6 +1,6 @@
 # Configure ExUnit
 ExUnit.start(
-  #exclude: [:slow, :integration],
+  # exclude: [:slow, :integration],
   timeout: 60_000,
   max_cases: 4
 )

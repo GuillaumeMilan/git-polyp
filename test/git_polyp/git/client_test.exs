@@ -181,7 +181,8 @@ defmodule GitPolyp.Git.ClientTest do
     test "returns empty list for commit with no branches", %{repo: repo} do
       File.cd!(repo, fn ->
         {:ok, sha} = create_commit(repo, "First")
-        create_commit(repo, "Second")  # Move HEAD forward
+        # Move HEAD forward
+        create_commit(repo, "Second")
 
         {:ok, branches} = Client.branches_at(sha)
 

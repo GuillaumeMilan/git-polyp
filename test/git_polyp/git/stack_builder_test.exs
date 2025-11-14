@@ -119,7 +119,11 @@ defmodule GitPolyp.Git.StackBuilderTest do
       stack = [
         %{commit: "a1b2c3d4e5f6", branches: ["feat-1"], message: "Add authentication"},
         %{commit: "f6e5d4c3b2a1", branches: [], message: "Update tests"},
-        %{commit: "123456789abc", branches: ["feat-2", "dev"], message: "Fix bug\nAdditional details"}
+        %{
+          commit: "123456789abc",
+          branches: ["feat-2", "dev"],
+          message: "Fix bug\nAdditional details"
+        }
       ]
 
       result = StackBuilder.format_stack(stack)

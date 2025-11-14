@@ -131,13 +131,14 @@ defmodule GitPolyp.Integration.FullWorkflowTest do
       {:ok, stack, merge_base} = StackBuilder.build_stack("main", "feature-3")
 
       # Save state (simulating conflict scenario)
-      metadata = GitPolyp.State.Metadata.new(
-        "main",
-        merge_base,
-        "feature-3",
-        stack,
-        "main"
-      )
+      metadata =
+        GitPolyp.State.Metadata.new(
+          "main",
+          merge_base,
+          "feature-3",
+          stack,
+          "main"
+        )
 
       assert :ok = Manager.save(metadata)
       assert Manager.exists?() == true

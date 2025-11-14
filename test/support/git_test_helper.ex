@@ -52,11 +52,12 @@ defmodule GitPolyp.GitTestHelper do
   Returns :ok or {:error, reason}
   """
   def create_branch(repo_path, branch_name, commit_sha \\ nil) do
-    args = if commit_sha do
-      ["branch", branch_name, commit_sha]
-    else
-      ["branch", branch_name]
-    end
+    args =
+      if commit_sha do
+        ["branch", branch_name, commit_sha]
+      else
+        ["branch", branch_name]
+      end
 
     case System.cmd("git", args, cd: repo_path, stderr_to_stdout: true) do
       {_, 0} -> :ok
@@ -98,19 +99,21 @@ defmodule GitPolyp.GitTestHelper do
     {:ok, _} = create_commit(repo_path, "Initial commit on #{base}")
 
     # Create each branch with commits
-    commits_map = Enum.reduce(branches, commits_map, fn branch, acc ->
-      # Create commits for this branch
-      commit_shas = Enum.map(1..commits_per_branch, fn n ->
-        message = "Commit #{n} on #{branch}"
-        {:ok, sha} = create_commit(repo_path, message)
-        sha
+    commits_map =
+      Enum.reduce(branches, commits_map, fn branch, acc ->
+        # Create commits for this branch
+        commit_shas =
+          Enum.map(1..commits_per_branch, fn n ->
+            message = "Commit #{n} on #{branch}"
+            {:ok, sha} = create_commit(repo_path, message)
+            sha
+          end)
+
+        # Create branch at current HEAD
+        :ok = create_branch(repo_path, branch)
+
+        Map.put(acc, branch, commit_shas)
       end)
-
-      # Create branch at current HEAD
-      :ok = create_branch(repo_path, branch)
-
-      Map.put(acc, branch, commit_shas)
-    end)
 
     # Return to base branch
     checkout_branch(repo_path, base)
@@ -149,21 +152,23 @@ defmodule GitPolyp.GitTestHelper do
     checkout_branch(repo_path, "main")
     {_, 0} = System.cmd("git", ["reset", "--hard", base_sha], cd: repo_path)
 
-    {:ok, %{
-      branches: ["feature-1", "feature-2", "feature-3"],
-      commits: %{
-        "feature-1" => [commit1_sha],
-        "feature-2" => [commit2_sha],
-        "feature-3" => [commit3_sha]
-      }
-    }}
+    {:ok,
+     %{
+       branches: ["feature-1", "feature-2", "feature-3"],
+       commits: %{
+         "feature-1" => [commit1_sha],
+         "feature-2" => [commit2_sha],
+         "feature-3" => [commit3_sha]
+       }
+     }}
   end
 
   @doc """
   Gets the commit SHA for a commit with a specific message.
   """
   def get_commit_sha(repo_path, message) do
-    {output, 0} = System.cmd("git", ["log", "--all", "--format=%H %s"], cd: repo_path, stderr_to_stdout: true)
+    {output, 0} =
+      System.cmd("git", ["log", "--all", "--format=%H %s"], cd: repo_path, stderr_to_stdout: true)
 
     output
     |> String.split("\n", trim: true)

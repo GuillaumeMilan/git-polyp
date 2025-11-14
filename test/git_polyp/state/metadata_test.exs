@@ -11,7 +11,8 @@ defmodule GitPolyp.State.MetadataTest do
 
   describe "new/5" do
     test "creates metadata struct with all required fields" do
-      metadata = Metadata.new("main", "merge_base_sha", "feature-3", @sample_stack, "current-branch")
+      metadata =
+        Metadata.new("main", "merge_base_sha", "feature-3", @sample_stack, "current-branch")
 
       assert metadata.base_branch == "main"
       assert metadata.merge_base == "merge_base_sha"
@@ -154,12 +155,13 @@ defmodule GitPolyp.State.MetadataTest do
 
     test "returns error for missing required fields" do
       # JSON missing target_branch
-      incomplete_json = Jason.encode!(%{
-        base_branch: "main",
-        merge_base: "abc123",
-        stack: [],
-        original_branch: "current"
-      })
+      incomplete_json =
+        Jason.encode!(%{
+          base_branch: "main",
+          merge_base: "abc123",
+          stack: [],
+          original_branch: "current"
+        })
 
       assert {:error, error_msg} = Metadata.decode(incomplete_json)
       assert error_msg =~ "Missing required fields"
@@ -167,13 +169,14 @@ defmodule GitPolyp.State.MetadataTest do
     end
 
     test "returns error when required field is null" do
-      json_with_null = Jason.encode!(%{
-        base_branch: "main",
-        merge_base: nil,
-        target_branch: "feature",
-        stack: [],
-        original_branch: "current"
-      })
+      json_with_null =
+        Jason.encode!(%{
+          base_branch: "main",
+          merge_base: nil,
+          target_branch: "feature",
+          stack: [],
+          original_branch: "current"
+        })
 
       assert {:error, error_msg} = Metadata.decode(json_with_null)
       assert error_msg =~ "Missing required fields"
@@ -210,7 +213,11 @@ defmodule GitPolyp.State.MetadataTest do
 
     test "handles multiple branches per commit" do
       multi_branch_stack = [
-        %{commit: "abc", branches: ["feature-1", "feature-2", "feature-3"], message: "Multi-branch"}
+        %{
+          commit: "abc",
+          branches: ["feature-1", "feature-2", "feature-3"],
+          message: "Multi-branch"
+        }
       ]
 
       original = Metadata.new("main", "abc", "feature", multi_branch_stack, "current")
@@ -224,16 +231,17 @@ defmodule GitPolyp.State.MetadataTest do
 
     test "handles malformed base64 gracefully" do
       # Manually create JSON with invalid base64
-      malformed_json = Jason.encode!(%{
-        base_branch: "main",
-        merge_base: "abc",
-        target_branch: "feature",
-        stack: [
-          %{commit: "abc", branches: ["br"], message: "not-valid-base64!!!"}
-        ],
-        original_branch: "current",
-        timestamp: "2024-01-01T00:00:00Z"
-      })
+      malformed_json =
+        Jason.encode!(%{
+          base_branch: "main",
+          merge_base: "abc",
+          target_branch: "feature",
+          stack: [
+            %{commit: "abc", branches: ["br"], message: "not-valid-base64!!!"}
+          ],
+          original_branch: "current",
+          timestamp: "2024-01-01T00:00:00Z"
+        })
 
       # Should still decode, but message might not be decoded properly
       assert {:ok, decoded} = Metadata.decode(malformed_json)

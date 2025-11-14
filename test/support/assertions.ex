@@ -9,11 +9,13 @@ defmodule GitPolyp.Assertions do
   Asserts that a branch points to a specific commit SHA.
   """
   def assert_branch_points_to(repo_path, branch_name, expected_sha) do
-    {actual_sha, 0} = System.cmd("git", ["rev-parse", branch_name], cd: repo_path, stderr_to_stdout: true)
+    {actual_sha, 0} =
+      System.cmd("git", ["rev-parse", branch_name], cd: repo_path, stderr_to_stdout: true)
+
     actual_sha = String.trim(actual_sha)
 
     assert actual_sha == expected_sha,
-      "Expected branch '#{branch_name}' to point to #{expected_sha}, but it points to #{actual_sha}"
+           "Expected branch '#{branch_name}' to point to #{expected_sha}, but it points to #{actual_sha}"
   end
 
   @doc """
@@ -24,11 +26,13 @@ defmodule GitPolyp.Assertions do
     commit_shas
     |> Enum.chunk_every(2, 1, :discard)
     |> Enum.each(fn [parent_sha, child_sha] ->
-      {parent_of_child, 0} = System.cmd("git", ["rev-parse", "#{child_sha}^"], cd: repo_path, stderr_to_stdout: true)
+      {parent_of_child, 0} =
+        System.cmd("git", ["rev-parse", "#{child_sha}^"], cd: repo_path, stderr_to_stdout: true)
+
       parent_of_child = String.trim(parent_of_child)
 
       assert parent_of_child == parent_sha,
-        "Expected commit #{child_sha} to have parent #{parent_sha}, but it has parent #{parent_of_child}"
+             "Expected commit #{child_sha} to have parent #{parent_sha}, but it has parent #{parent_of_child}"
     end)
   end
 
@@ -37,7 +41,7 @@ defmodule GitPolyp.Assertions do
   """
   def assert_file_exists(file_path) do
     assert File.exists?(file_path),
-      "Expected file to exist at #{file_path}"
+           "Expected file to exist at #{file_path}"
   end
 
   @doc """
@@ -45,14 +49,17 @@ defmodule GitPolyp.Assertions do
   """
   def refute_file_exists(file_path) do
     refute File.exists?(file_path),
-      "Expected file to not exist at #{file_path}, but it does"
+           "Expected file to not exist at #{file_path}, but it does"
   end
 
   @doc """
   Asserts that a branch exists in the repository.
   """
   def assert_branch_exists(repo_path, branch_name) do
-    case System.cmd("git", ["rev-parse", "--verify", branch_name], cd: repo_path, stderr_to_stdout: true) do
+    case System.cmd("git", ["rev-parse", "--verify", branch_name],
+           cd: repo_path,
+           stderr_to_stdout: true
+         ) do
       {_, 0} -> :ok
       {_, _} -> flunk("Expected branch '#{branch_name}' to exist, but it does not")
     end
@@ -69,7 +76,7 @@ defmodule GitPolyp.Assertions do
     rebase_in_progress = File.dir?(rebase_merge_dir) or File.dir?(rebase_apply_dir)
 
     assert rebase_in_progress,
-      "Expected a rebase to be in progress, but none was found"
+           "Expected a rebase to be in progress, but none was found"
   end
 
   @doc """
@@ -83,18 +90,20 @@ defmodule GitPolyp.Assertions do
     rebase_in_progress = File.dir?(rebase_merge_dir) or File.dir?(rebase_apply_dir)
 
     refute rebase_in_progress,
-      "Expected no rebase to be in progress, but one was found"
+           "Expected no rebase to be in progress, but one was found"
   end
 
   @doc """
   Asserts that the current branch is the expected one.
   """
   def assert_current_branch(repo_path, expected_branch) do
-    {actual_branch, 0} = System.cmd("git", ["branch", "--show-current"], cd: repo_path, stderr_to_stdout: true)
+    {actual_branch, 0} =
+      System.cmd("git", ["branch", "--show-current"], cd: repo_path, stderr_to_stdout: true)
+
     actual_branch = String.trim(actual_branch)
 
     assert actual_branch == expected_branch,
-      "Expected current branch to be '#{expected_branch}', but it is '#{actual_branch}'"
+           "Expected current branch to be '#{expected_branch}', but it is '#{actual_branch}'"
   end
 
   @doc """

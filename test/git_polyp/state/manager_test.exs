@@ -212,7 +212,8 @@ defmodule GitPolyp.State.ManagerTest do
     end
 
     test "returns ok when file doesn't exist", %{repo: _repo} do
-      Manager.delete()  # Ensure it doesn't exist
+      # Ensure it doesn't exist
+      Manager.delete()
 
       assert :ok = Manager.delete()
     end

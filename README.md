@@ -19,6 +19,8 @@ mix escript.build
 
 # Optional: Install globally
 cp git-polyp /usr/local/bin/
+
+git-polyp install
 ```
 
 ### As a library
@@ -31,6 +33,39 @@ def deps do
     {:git_polyp, "~> 0.1.0"}
   ]
 end
+```
+
+## Shell Completion
+
+GitPolyp includes shell completion scripts for Bash, Zsh, and Fish that provide:
+- Command and flag completion
+- Dynamic git branch name suggestions
+- Context-aware completions
+
+### Quick Setup
+
+```bash
+git-polyp install
+```
+
+The install script will auto-detect your shell and set up completions automatically.
+
+For manual installation or troubleshooting, see the [completions README](completions/README.md).
+
+### Usage Examples
+
+```bash
+# Tab completion for commands
+git-polyp <TAB>
+# Shows: rebase-stack --help --version
+
+# Tab completion for flags
+git-polyp rebase-stack --<TAB>
+# Shows: --continue --abort --help
+
+# Tab completion for branch names
+git-polyp rebase-stack <TAB>
+# Shows: main develop feature-1 feature-2 ...
 ```
 
 ## Commands
