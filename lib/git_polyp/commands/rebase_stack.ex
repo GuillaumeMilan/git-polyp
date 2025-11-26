@@ -275,7 +275,7 @@ defmodule GitPolyp.Commands.RebaseStack do
     IO.puts("")
 
     # Only prompt for auto-push in production (not during tests)
-    if @in_test do
+    if not @in_test do
       if Prompt.confirm("Would you like to push all these branches now?") do
         push_branches(updates)
       else
