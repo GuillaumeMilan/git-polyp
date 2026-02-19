@@ -1,6 +1,7 @@
 use clap::Parser;
 mod client;
 mod io;
+mod messages;
 mod stack;
 use io::Decorate;
 
@@ -60,48 +61,28 @@ fn main() {
 }
 
 fn rebase_stack(base: Option<String>, upstream: String, branch: Option<String>) {
-    let is_in_git_repo = client::is_in_repo()
-        .unwrap_or_exit("Not a git repository. Please run this command inside a git repository.");
+    let is_in_git_repo = client::is_in_repo().unwrap_or_exit(messages::error::NOT_IN_GIT_REPO);
     if !is_in_git_repo {
-        eprintln!("Not a git repository. Please run this command inside a git repository.");
+        eprintln!("{}", messages::error::NOT_IN_GIT_REPO);
         std::process::exit(1);
     }
     check_if_in_progress();
     let branch_ref = get_branch_ref(branch);
-    let upstream_ref = client::rev_parse(&upstream).unwrap_or_exit(
-        "Failed to verify the upstream. Make sure the provided upstream is correct and exists.",
-    );
+    let upstream_ref =
+        client::rev_parse(&upstream).unwrap_or_exit(messages::error::failed_to_verify_upstream());
     let merge_base_ref = client::merge_base(&upstream_ref, &branch_ref)
-        .unwrap_or_exit("Failed to find the merge base between the upstream and the branch.");
+        .unwrap_or_exit(messages::error::failed_to_find_merge_base());
 
-    let failed_to_build_stack = format!(
-        "{}
-        Please make sure the provided upstream and branch are correct and exist, and that the --base option, if provided, is correct and exists.
-        If the error persists, please check the state of your repository and try to fix it before running this command again.
-        ",
-        "Failed to build the stack of commits to rebase.".to_string().deco_as_error()
-    );
+    let failed_to_build_stack = messages::error::failed_to_build_stack();
 
     let rebase_stack = match &base {
         Some(base) => {
-            let failed_to_verify_base = format!(
-                "{}
-                Please make sure the provided {} option is correct and exists.
-                ",
-                "Failed to verify the --base option content.".to_string().deco_as_error(),
-                "--base".to_string().deco_as_command()
-            );
+            let failed_to_verify_base = messages::error::failed_to_verify_base();
             let base_ref = client::rev_parse(base).unwrap_or_exit(&failed_to_verify_base);
             let base_upstream_base = client::merge_base(base, &upstream)
                 .unwrap_or_exit(&failed_to_verify_base);
             if base_upstream_base != merge_base_ref {
-                let error_message = format!(
-                    "{}
-                    Please provide a {} base option that is a descendant of the upstream.
-                    ",
-                    "The provided --base option is not a descendant of the upstream.".to_string().deco_as_error(),
-                    "--base".to_string().deco_as_command()
-                );
+                let error_message = messages::error::base_not_descendant_of_upstream();
                 eprintln!("{}", &error_message);
                 std::process::exit(1);
             }
@@ -116,73 +97,42 @@ fn rebase_stack(base: Option<String>, upstream: String, branch: Option<String>) 
 
     println!("Stack\n-----\n{}", rebase_stack.format());
     if false
-        == io::YNQuestion::new("Do you want to rebase this stack?".to_string())
+        == io::YNQuestion::new(messages::info::ask_rebase_confirmation())
             .ask()
             .unwrap_or(false)
     {
-        println!("Aborting rebase.");
+        println!("{}", messages::info::aborting_rebase());
         std::process::exit(0);
     }
     check_if_in_progress();
 
-    let failed_to_clean_stack = format!(
-        "{}
-        Please run `{}` to clean the stack.
-        If the error persists, please try to remove the {} file manually.
-        ",
-        "Failed to clean the stack state !"
-            .to_string()
-            .deco_as_error(),
-        "git-polyp rebase-stack --abort"
-            .to_string()
-            .deco_as_command(),
-        ".git/polyp/stack.json".to_string().deco_as_path()
-    );
+    let failed_to_clean_stack = messages::error::failed_to_clean_stack();
 
     match rebase_stack.persist() {
         Ok(_) => (),
         Err(_) => {
-            eprintln!("Failed intiialize the rebase. Cleaning...");
+            eprintln!("{}", messages::info::failed_initialize_rebase());
             stack::Stack::clean().unwrap_or_exit(&failed_to_clean_stack);
         }
     }
-    println!("Stack persisted. Starting rebase...");
-    let rebase_error = format!(
-        "{}
-        Please run `{}` to clean the stack.
-        If the error persists, please try to remove the {} file manually.
-        ",
-        "Failed to clean the stack !".to_string().deco_as_error(),
-        "git-polyp rebase-stack --abort"
-            .to_string()
-            .deco_as_command(),
-        ".git/polyp/stack.json".to_string().deco_as_path()
-    );
+    println!("{}", messages::info::stack_persisted());
+    let rebase_error = messages::error::failed_to_clean_stack_after_rebase();
 
     match perform_rebase(&rebase_stack, &upstream_ref) {
         Ok(()) => (),
         Err(()) => {
-            eprintln!("Failed to perform the rebase. Cleaning...");
+            eprintln!("{}", messages::info::failed_to_perform_rebase());
             stack::Stack::clean().unwrap_or_exit(&rebase_error);
             std::process::exit(1);
         }
     }
 
-    let failed_to_reset_stack_as_before = format!(
-        "{}
-        Please run `{}` to reset the stack to its previous state.
-        If the error persists, please try to restore the stack file with the backup file created during the rebase process, or remove the stack file manually if you don't have a backup.
-        ",
-        "Failed to reset the stack as it was before !".to_string().deco_as_error(),
-        "git-polyp rebase-stack --reset"
-            .to_string()
-            .deco_as_command(),
-    );
+    let failed_to_reset_stack_as_before = messages::error::failed_to_reset_stack_as_before();
 
     match set_new_stack(&rebase_stack, &upstream_ref) {
         Ok(()) => (),
         Err(_) => {
-            eprintln!("Failed to set the new stack. Cleaning...");
+            eprintln!("{}", messages::info::failed_to_set_new_stack());
             rebase_stack
                 .apply()
                 .unwrap_or_exit(&failed_to_reset_stack_as_before);
@@ -198,29 +148,14 @@ fn rebase_stack(base: Option<String>, upstream: String, branch: Option<String>) 
         .join(" ");
 
     let push_command = format!("git push origin {}", branches_str).deco_as_command();
-    let push_question = format!(
-        "Rebase successful. Do you want to push the new branches to '{}' ?
-        You can also push them later with the following command:
-        {}",
-        "origin".to_string().deco_as_command(),
-        push_command
-    );
+    let push_question = messages::info::ask_push_confirmation(push_command.to_string());
 
     if false == io::YNQuestion::new(push_question).ask().unwrap_or(false) {
         stack::Stack::clean().unwrap_or_exit(&failed_to_clean_stack);
         std::process::exit(0);
     }
 
-    let failed_to_push_branches = format!(
-        "{}
-        Please push the branches manually with the following command:
-        {}
-        ",
-        "Failed to push the new branches to the remote repository."
-            .to_string()
-            .deco_as_error(),
-        push_command
-    );
+    let failed_to_push_branches = messages::error::failed_to_push_branches(&push_command);
 
     match client::push_branches("origin", branches) {
         Ok(()) => (),
@@ -254,24 +189,16 @@ fn set_new_stack(rebase_stack: &stack::Stack, upstream_ref: &str) -> Result<(), 
 }
 
 fn check_if_in_progress() {
-    let in_progress = stack::Stack::exists().unwrap_or_exit("Failed to access to git-polyp private directory. Make sure you have the right to access the .git directory.");
+    let in_progress =
+        stack::Stack::exists().unwrap_or_exit(messages::error::FAILED_TO_ACCESS_GIT_POLYP_DIR);
     if in_progress {
-        eprintln!("A rebase is already in progress.
-        Continue it with `git-polyp rebase-stack --continue`.
-        Abort it without doing any modification to the repository with `git-polyp rebase-stack --abort`.
-        Abort by reseting the stack of commit to its version before any operation with `git-polyp rebase-stack --reset`.
-        ");
+        eprintln!("{}", messages::info::rebase_in_progress());
         std::process::exit(1);
     };
 }
 
 fn get_branch_ref(branch: Option<String>) -> String {
-    let failed_to_find_branch = format!(
-        "{}",
-        "Failed to find the current branch name. Make sure you are in a git repository."
-            .to_string()
-            .deco_as_error()
-    );
+    let failed_to_find_branch = messages::error::failed_to_find_branch();
     let branch = match branch {
         Some(branch) => branch,
         None => client::current_branch().unwrap_or_exit(&failed_to_find_branch),

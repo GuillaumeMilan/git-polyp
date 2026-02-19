@@ -149,7 +149,11 @@ pub fn move_branche_at(commit_hash: &str, branch: &str) -> Result<(), ClientErro
 }
 
 pub fn push_branches(remote: &str, branches: Vec<String>) -> Result<(), ClientError> {
-    let mut args = vec!["push".to_string(), remote.to_string()];
+    let mut args = vec![
+        "push".to_string(),
+        "--force-with-lease".to_string(),
+        remote.to_string(),
+    ];
 
     for branch in branches {
         args.push(branch);

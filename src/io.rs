@@ -31,3 +31,4 @@ pub trait Decorate: std::fmt::Display {
 }
 
 impl Decorate for String {}
+impl Decorate for &str {}
