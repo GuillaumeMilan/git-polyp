@@ -5,7 +5,7 @@ use std::fs;
 use crate::ResultExt;
 use crate::client;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StackEntry {
     commit: String,
     branches: Vec<String>,
@@ -42,9 +42,10 @@ pub enum StackError {
     CannotFindPolypDir,
     CannotWriteToFile,
     CannotReadFromFile,
+    CannotApplyStack,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Stack {
     destination_ref: String,
     entries: Vec<StackEntry>,
@@ -113,6 +114,55 @@ impl Stack {
         } else {
             Ok(())
         }
+    }
+
+    pub fn apply(&self) -> Result<(), StackError> {
+        for entry in self.entries.iter() {
+            for branch in entry.branches.iter() {
+                client::move_branche_at(&entry.commit, &branch)
+                    .map_err(|_| StackError::CannotApplyStack)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn apply_branches_from(&self, other: &Stack) -> Result<Stack, StackError> {
+        let mut new_stack = self.clone();
+        // Create a dictionnary mapping commit messages to branches for the other stack
+        let branches_message_map = other
+            .entries
+            .iter()
+            .map(|entry| (entry.message.clone(), entry.branches.clone()))
+            .collect::<std::collections::HashMap<String, Vec<String>>>();
+
+        for entry in new_stack.entries.iter_mut() {
+            match branches_message_map.get(&entry.message) {
+                Some(branches) => entry.branches = branches.clone(),
+                None => entry.branches = Vec::new(),
+            }
+        }
+        Ok(new_stack)
+    }
+
+    pub fn base_ref(&self) -> &str {
+        self.entries
+            .first()
+            .map(|entry| &entry.commit)
+            .expect("Stack should have at least one entry")
+    }
+
+    pub fn top_ref(&self) -> &str {
+        self.entries
+            .last()
+            .map(|entry| &entry.commit)
+            .expect("Stack should have at least one entry")
+    }
+
+    pub fn branches(&self) -> Vec<String> {
+        self.entries
+            .iter()
+            .flat_map(|entry| entry.branches.clone())
+            .collect()
     }
 }
 

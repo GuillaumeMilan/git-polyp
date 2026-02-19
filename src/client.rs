@@ -4,6 +4,7 @@ struct GitCommand {
     args: Vec<String>,
 }
 
+#[derive(Debug)]
 pub enum ClientError {
     Command,
     NonZeroExitCode,
@@ -120,4 +121,38 @@ pub fn branches_at(commit_hash: &str) -> Result<Vec<String>, ClientError> {
     .execute()?;
 
     Ok(output.lines().map(|line| line.trim().to_string()).collect())
+}
+
+pub fn checkout(revision: &str) -> Result<(), ClientError> {
+    GitCommand::new(vec!["checkout".to_string(), revision.to_string()])
+        .execute()
+        .map(|_| ())
+}
+
+pub fn cherry_pick(commit_a: &str, commit_b: &str) -> Result<(), ClientError> {
+    let args = vec![
+        "cherry-pick".to_string(),
+        format!("{}^..{}", commit_a, commit_b),
+    ];
+    GitCommand::new(args).execute().map(|_| ())
+}
+
+pub fn move_branche_at(commit_hash: &str, branch: &str) -> Result<(), ClientError> {
+    GitCommand::new(vec![
+        "branch".to_string(),
+        "-f".to_string(),
+        branch.to_string(),
+        commit_hash.to_string(),
+    ])
+    .execute()
+    .map(|_| ())
+}
+
+pub fn push_branches(remote: &str, branches: Vec<String>) -> Result<(), ClientError> {
+    let mut args = vec!["push".to_string(), remote.to_string()];
+
+    for branch in branches {
+        args.push(branch);
+    }
+    GitCommand::new(args).execute().map(|_| ())
 }
