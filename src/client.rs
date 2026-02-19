@@ -59,13 +59,17 @@ pub fn polyp_dir() -> Result<String, ClientError> {
     Ok(polyp_dir)
 }
 
-pub fn rev_parse() -> Result<String, ClientError> {
+pub fn current_branch() -> Result<String, ClientError> {
     GitCommand::new(vec![
         "rev-parse".to_string(),
         "--abbrev-ref".to_string(),
         "HEAD".to_string(),
     ])
     .execute()
+}
+
+pub fn rev_parse(rev: &str) -> Result<String, ClientError> {
+    GitCommand::new(vec!["rev-parse".to_string(), rev.to_string()]).execute()
 }
 
 pub fn is_in_repo() -> Result<bool, ClientError> {

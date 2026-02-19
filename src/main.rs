@@ -7,7 +7,7 @@ mod stack;
 enum Commands {
     RebaseStack {
         #[arg(short, long)]
-        onto: Option<String>,
+        base: Option<String>,
 
         upstream: String,
         // branch that needs to be rebased, if not provided, it will be the current branch.
@@ -45,11 +45,11 @@ fn main() {
     let args: GitPolyp = GitPolyp::parse();
     match args.command {
         Commands::RebaseStack {
-            onto,
+            base,
             upstream,
             branch,
         } => {
-            rebase_stack(onto, upstream, branch);
+            rebase_stack(base, upstream, branch);
         }
         Commands::Unstack { from } => {
             println!("Unstack command called with from: {}", from);
@@ -58,7 +58,7 @@ fn main() {
     }
 }
 
-fn rebase_stack(onto: Option<String>, upstream: String, branch: Option<String>) {
+fn rebase_stack(base: Option<String>, upstream: String, branch: Option<String>) {
     let is_in_git_repo = client::is_in_repo()
         .unwrap_or_exit("Not a git repository. Please run this command inside a git repository.");
     if !is_in_git_repo {
@@ -66,13 +66,29 @@ fn rebase_stack(onto: Option<String>, upstream: String, branch: Option<String>) 
         std::process::exit(1);
     }
     check_if_in_progress();
-    let branch = ensure_branch(branch);
-    let merge_base = client::merge_base(&upstream, &branch)
+    let branch_ref = get_branch_ref(branch);
+    let upstream_ref = client::rev_parse(&upstream).unwrap_or_exit(
+        "Failed to verify the upstream. Make sure the provided upstream is correct and exists.",
+    );
+    let merge_base_ref = client::merge_base(&upstream_ref, &branch_ref)
         .unwrap_or_exit("Failed to find the merge base between the upstream and the branch.");
 
-    let rebase_stack = match &onto {
-        Some(onto) => stack::Stack::new(onto, &branch),
-        None => stack::Stack::new(&merge_base, &branch),
+    let rebase_stack = match &base {
+        Some(base) => {
+            const FAILED_TO_VERIFY_BASE: &str = "Failed to verify the --base option content. Make sure the provided commit exists.";
+            let base_ref = client::rev_parse(base).unwrap_or_exit(FAILED_TO_VERIFY_BASE);
+            let base_upstream_base = client::merge_base(base, &upstream)
+                .unwrap_or_exit(FAILED_TO_VERIFY_BASE);
+            if base_upstream_base != merge_base_ref {
+                eprintln!("The provided --base option is not a descendant of the upstream. Please provide an --base option that is a descendant of the upstream.");
+                std::process::exit(1);
+            }
+            println!("As base ref {:?} is a descendant of the upstream, the stack will be built from {:?} to {:?}.",
+                base_ref, merge_base_ref, branch_ref);
+
+            stack::Stack::new(&base_ref, &branch_ref, &upstream_ref)
+        },
+        None => stack::Stack::new(&merge_base_ref, &branch_ref, &upstream_ref),
     }
     .unwrap_or_exit("Failed to build the stack of commits to rebase.");
 
@@ -98,12 +114,7 @@ fn rebase_stack(onto: Option<String>, upstream: String, branch: Option<String>) 
             );
         }
     }
-
-    println!(
-        "Rebasing {} onto {}",
-        branch,
-        onto.unwrap_or_else(|| "default upstream".to_string())
-    );
+    println!("Stack persisted. Starting rebase... Not implemented yet");
 }
 
 fn check_if_in_progress() {
@@ -118,11 +129,12 @@ fn check_if_in_progress() {
     };
 }
 
-fn ensure_branch(branch: Option<String>) -> String {
+fn get_branch_ref(branch: Option<String>) -> String {
     const FAILED_TO_FIND_BRANCH: &str =
         "Failed to find the current branch name. Make sure you are in a git repository.";
-    match branch {
+    let branch = match branch {
         Some(branch) => branch,
-        None => client::rev_parse().unwrap_or_exit(FAILED_TO_FIND_BRANCH),
-    }
+        None => client::current_branch().unwrap_or_exit(FAILED_TO_FIND_BRANCH),
+    };
+    client::rev_parse(&branch).unwrap_or_exit(FAILED_TO_FIND_BRANCH)
 }

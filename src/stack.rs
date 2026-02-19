@@ -46,19 +46,21 @@ pub enum StackError {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Stack {
-    upstream: String,
-    branch: String,
+    destination_ref: String,
     entries: Vec<StackEntry>,
 }
 
 const STACK_FILE: &str = "rebase_stack.json";
 
 impl Stack {
-    pub fn new(upstream: &str, branch: &str) -> Result<Self, client::ClientError> {
-        let entries = build_stack(upstream, branch)?;
+    pub fn new(
+        base_ref: &str,
+        top_ref: &str,
+        destination_ref: &str,
+    ) -> Result<Self, client::ClientError> {
+        let entries = build_stack(base_ref, top_ref)?;
         Ok(Stack {
-            upstream: upstream.to_string(),
-            branch: branch.to_string(),
+            destination_ref: destination_ref.to_string(),
             entries,
         })
     }
