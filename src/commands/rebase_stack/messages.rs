@@ -7,6 +7,15 @@ pub mod error {
         "Not a git repository. Please run this command inside a git repository.";
     pub const FAILED_TO_ACCESS_GIT_POLYP_DIR: &str = "Failed to access to git-polyp private directory. Make sure you have the right to access the .git directory.";
 
+    pub fn invalid_arguments() -> String {
+        format!(
+            "{}
+            See `{}` for more information.",
+            "Invalid arguments provided.".deco_as_error(),
+            "git-polyp rebase-stack --help".deco_as_command()
+        )
+    }
+
     pub fn failed_to_verify_upstream() -> &'static str {
         "Failed to verify the upstream. Make sure the provided upstream is correct and exists."
     }
@@ -64,13 +73,31 @@ pub mod error {
         )
     }
 
+    pub fn no_rebase_in_progress() -> String {
+        format!(
+            "{}
+            Please make sure you have an ongoing rebase operation before running this command.",
+            "No ongoing rebase operation found!".deco_as_error()
+        )
+    }
+
+    pub fn failed_to_undo_rebase() -> String {
+        format!(
+            "{}
+            Please try rerunnning`{}`.
+            If the error persists, please try to restore the stack file with the backup file created during the rebase process, or remove the stack file manually if you don't have a backup.",
+            "Failed to undo the ongoing rebase as it was before running any command!".deco_as_error(),
+            "git-polyp rebase-stack --undo".deco_as_command(),
+        )
+    }
+
     pub fn failed_to_reset_stack_as_before() -> String {
         format!(
             "{}
             Please run `{}` to reset the stack to its previous state.
             If the error persists, please try to restore the stack file with the backup file created during the rebase process, or remove the stack file manually if you don't have a backup.",
             "Failed to reset the stack as it was before!".deco_as_error(),
-            "git-polyp rebase-stack --reset".deco_as_command(),
+            "git-polyp rebase-stack --undo".deco_as_command(),
         )
     }
 
@@ -94,11 +121,24 @@ pub mod error {
 pub mod info {
     use super::Decorate;
 
-    pub fn rebase_in_progress() -> &'static str {
-        "A rebase is already in progress.
-        Continue it with `git-polyp rebase-stack --continue`.
-        Abort it without doing any modification to the repository with `git-polyp rebase-stack --abort`.
-        Abort by reseting the stack of commit to its version before any operation with `git-polyp rebase-stack --reset`."
+    pub fn undoing_rebase() -> &'static str {
+        "Reseting your repository as it was before starting any rebase operation."
+    }
+
+    pub fn rebase_undone() -> &'static str {
+        "Rebase undone. Your repository is now in the state it was before starting any rebase operation."
+    }
+
+    pub fn rebase_in_progress() -> std::string::String {
+        format!(
+            "A rebase is already in progress.
+        Continue it with `{}`.
+        Abort it without doing any modification to the repository with `{}`.
+        Abort by reseting the stack of commit to its version before any operation with `{}`.",
+            "git-polyp rebase-stack --continue".deco_as_command(),
+            "git-polyp rebase-stack --abort".deco_as_command(),
+            "git-polyp rebase-stack --undo".deco_as_command()
+        )
     }
 
     pub fn ask_rebase_confirmation() -> String {
