@@ -13,31 +13,40 @@ pub fn run(
     branch: Option<String>,
 ) {
     match (_continue, abort, undo, upstream) {
-        (false, false, false, None) => {
+        (true, false, false, None) => run_continue(),
+        (false, true, false, None) => run_abort(),
+        (false, false, true, None) => run_undo(),
+        (false, false, false, Some(upstream)) => run_normal(base, upstream, branch),
+        _ => {
+            // We should never enter this case (as clap should prevent it with the
+            // conflicts_with_all and arg_required_else_help settings)
+            eprintln!("{}", messages::error::invalid_arguments());
             // TODO execute equivalent of rebase-stack --help
-            std::process::exit(0);
+            std::process::exit(1);
         }
-        (true, false, false, None) => {}
-        (false, true, false, None) => {
-            match stack::Stack::load() {
-                Ok(_) => (),
-                Err(_) => {
-                    eprintln!("{}", messages::error::no_rebase_in_progress());
-                    std::process::exit(1);
-                }
-            }
+    }
+}
+
+fn run_continue() {
+    match stack::Stack::load() {
+        Ok(rebase_stack) => {
+            perform_continue(&rebase_stack);
+        }
+        Err(_) => {
+            eprintln!("{}", messages::error::no_rebase_in_progress());
+            std::process::exit(1);
+        }
+    }
+}
+
+fn run_abort() {
+    match stack::Stack::load() {
+        Ok(_) => {
             let failed_to_clean_stack = messages::error::failed_to_clean_stack();
             stack::Stack::clean().unwrap_or_exit(&failed_to_clean_stack);
         }
-        (false, false, true, None) => {
-            run_undo();
-        }
-        (false, false, false, Some(upstream)) => {
-            run_normal(base, upstream, branch);
-        }
-        _ => {
-            eprintln!("{}", messages::error::invalid_arguments());
-            // TODO execute equivalent of rebase-stack --help
+        Err(_) => {
+            eprintln!("{}", messages::error::no_rebase_in_progress());
             std::process::exit(1);
         }
     }
@@ -109,10 +118,13 @@ fn run_normal(base: Option<String>, upstream: String, branch: Option<String>) {
             stack::Stack::clean().unwrap_or_exit(&failed_to_clean_stack);
         }
     }
-    println!("{}", messages::info::stack_persisted());
+    perform_continue(&rebase_stack);
+}
+
+fn perform_continue(rebase_stack: &stack::Stack) {
     let rebase_error = messages::error::failed_to_clean_stack_after_rebase();
 
-    match perform_rebase(&rebase_stack, &upstream_ref) {
+    match perform_rebase(&rebase_stack) {
         Ok(()) => (),
         Err(()) => {
             eprintln!("{}", messages::info::failed_to_perform_rebase());
@@ -123,7 +135,7 @@ fn run_normal(base: Option<String>, upstream: String, branch: Option<String>) {
 
     let failed_to_reset_stack_as_before = messages::error::failed_to_reset_stack_as_before();
 
-    match set_new_stack(&rebase_stack, &upstream_ref) {
+    match set_new_stack(&rebase_stack) {
         Ok(()) => (),
         Err(_) => {
             eprintln!("{}", messages::info::failed_to_set_new_stack());
@@ -143,6 +155,7 @@ fn run_normal(base: Option<String>, upstream: String, branch: Option<String>) {
 
     let push_command = format!("git push origin {}", branches_str).deco_as_command();
     let push_question = messages::info::ask_push_confirmation(push_command.to_string());
+    let failed_to_clean_stack = messages::error::failed_to_clean_stack();
 
     if false == YNQuestion::new(push_question).ask().unwrap_or(false) {
         stack::Stack::clean().unwrap_or_exit(&failed_to_clean_stack);
@@ -163,16 +176,21 @@ fn run_normal(base: Option<String>, upstream: String, branch: Option<String>) {
     stack::Stack::clean().unwrap_or_exit(&failed_to_clean_stack);
 }
 
-fn perform_rebase(rebase_stack: &stack::Stack, upstream_ref: &str) -> Result<(), ()> {
-    client::checkout(upstream_ref).map_err(|_| ())?;
+fn perform_rebase(rebase_stack: &stack::Stack) -> Result<(), ()> {
+    client::checkout(&rebase_stack.destination_ref).map_err(|_| ())?;
     client::cherry_pick(rebase_stack.base_ref(), rebase_stack.top_ref()).map_err(|_| ())?;
 
     Ok(())
 }
 
-fn set_new_stack(rebase_stack: &stack::Stack, upstream_ref: &str) -> Result<(), ()> {
+fn set_new_stack(rebase_stack: &stack::Stack) -> Result<(), ()> {
     let new_head_ref = get_branch_ref(None);
-    let new_stack = stack::Stack::new(upstream_ref, &new_head_ref, upstream_ref).map_err(|_| ())?;
+    let new_stack = stack::Stack::new(
+        &rebase_stack.destination_ref,
+        &new_head_ref,
+        &rebase_stack.destination_ref,
+    )
+    .map_err(|_| ())?;
     let new_stack = new_stack
         .apply_branches_from(&rebase_stack)
         .map_err(|_| ())?;

@@ -47,7 +47,7 @@ pub enum StackError {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Stack {
-    destination_ref: String,
+    pub destination_ref: String,
     entries: Vec<StackEntry>,
 }
 

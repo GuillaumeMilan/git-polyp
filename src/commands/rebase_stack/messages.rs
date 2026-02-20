@@ -163,10 +163,6 @@ pub mod info {
         "Failed intiialize the rebase. Cleaning..."
     }
 
-    pub fn stack_persisted() -> &'static str {
-        "Stack persisted. Starting rebase..."
-    }
-
     pub fn failed_to_perform_rebase() -> &'static str {
         "Failed to perform the rebase. Cleaning..."
     }
