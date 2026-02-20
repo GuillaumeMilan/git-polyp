@@ -26,7 +26,7 @@ pub mod error {
 
     pub fn failed_to_verify_base() -> String {
         format!(
-            "{}
+            "{}\n\
             Please make sure the provided {} option is correct and exists.",
             "Failed to verify the --base option content.".deco_as_error(),
             "--base".deco_as_command()
@@ -35,7 +35,7 @@ pub mod error {
 
     pub fn base_not_descendant_of_upstream() -> String {
         format!(
-            "{}
+            "{}\n\
             Please provide a {} base option that is a descendant of the upstream.",
             "The provided --base option is not a descendant of the upstream.".deco_as_error(),
             "--base".deco_as_command()
@@ -44,8 +44,8 @@ pub mod error {
 
     pub fn failed_to_build_stack() -> String {
         format!(
-            "{}
-            Please make sure the provided upstream and branch are correct and exist, and that the --base option, if provided, is correct and exists.
+            "{}\n\
+            Please make sure the provided upstream and branch are correct and exist, and that the --base option, if provided, is correct and exists.\n\
             If the error persists, please check the state of your repository and try to fix it before running this command again.",
             "Failed to build the stack of commits to rebase.".deco_as_error()
         )
@@ -53,8 +53,8 @@ pub mod error {
 
     pub fn failed_to_clean_stack() -> String {
         format!(
-            "{}
-            Please run `{}` to clean the stack.
+            "{}\n\
+            Please run `{}` to clean the stack.\n\
             If the error persists, please try to remove the {} file manually.",
             "Failed to clean the stack state!".deco_as_error(),
             "git-polyp rebase-stack --abort".deco_as_command(),
@@ -64,8 +64,8 @@ pub mod error {
 
     pub fn failed_to_clean_stack_after_rebase() -> String {
         format!(
-            "{}
-            Please run `{}` to clean the stack.
+            "{}\n\
+            Please run `{}` to clean the stack.\n\
             If the error persists, please try to remove the {} file manually.",
             "Failed to clean the stack!".deco_as_error(),
             "git-polyp rebase-stack --abort".deco_as_command(),
@@ -75,7 +75,7 @@ pub mod error {
 
     pub fn no_rebase_in_progress() -> String {
         format!(
-            "{}
+            "{}\n\
             Please make sure you have an ongoing rebase operation before running this command.",
             "No ongoing rebase operation found!".deco_as_error()
         )
@@ -83,8 +83,8 @@ pub mod error {
 
     pub fn failed_to_undo_rebase() -> String {
         format!(
-            "{}
-            Please try rerunnning`{}`.
+            "{}\n\
+            Please try rerunnning`{}`.\n\
             If the error persists, please try to restore the stack file with the backup file created during the rebase process, or remove the stack file manually if you don't have a backup.",
             "Failed to undo the ongoing rebase as it was before running any command!".deco_as_error(),
             "git-polyp rebase-stack --undo".deco_as_command(),
@@ -93,8 +93,8 @@ pub mod error {
 
     pub fn failed_to_reset_stack_as_before() -> String {
         format!(
-            "{}
-            Please run `{}` to reset the stack to its previous state.
+            "{}\n\
+            Please run `{}` to reset the stack to its previous state.\n\
             If the error persists, please try to restore the stack file with the backup file created during the rebase process, or remove the stack file manually if you don't have a backup.",
             "Failed to reset the stack as it was before!".deco_as_error(),
             "git-polyp rebase-stack --undo".deco_as_command(),
@@ -109,8 +109,8 @@ pub mod error {
 
     pub fn failed_to_push_branches(push_command: &str) -> String {
         format!(
-            "{}
-            Please push the branches manually with the following command:
+            "{}\n\
+            Please push the branches manually with the following command:\n\
             {}",
             "Failed to push the new branches to the remote repository.".deco_as_error(),
             push_command
@@ -131,9 +131,9 @@ pub mod info {
 
     pub fn rebase_in_progress() -> std::string::String {
         format!(
-            "A rebase is already in progress.
-        Continue it with `{}`.
-        Abort it without doing any modification to the repository with `{}`.
+            "A rebase is already in progress.\n\
+        Continue it with `{}`.\n\
+        Abort it without doing any modification to the repository with `{}`.\n\
         Abort by reseting the stack of commit to its version before any operation with `{}`.",
             "git-polyp rebase-stack --continue".deco_as_command(),
             "git-polyp rebase-stack --abort".deco_as_command(),
@@ -147,8 +147,8 @@ pub mod info {
 
     pub fn ask_push_confirmation(push_command: String) -> String {
         format!(
-            "Rebase successful. Do you want to push the new branches to '{}' ?
-            You can also push them later with the following command:
+            "Rebase successful. Do you want to push the new branches to '{}' ?\n\
+            You can also push them later with the following command:\n\
             {}",
             "origin".deco_as_command(),
             push_command
