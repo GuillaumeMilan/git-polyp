@@ -18,9 +18,9 @@ impl YNQuestion {
 }
 
 pub trait Decorate: std::fmt::Display {
-    fn deco_as_error(&self) -> ColoredString {
-        let error_message = format!("[Error] {}", self);
-        error_message.bright_red().bold()
+    fn deco_as_error(&self) -> String {
+        let error_header = "[error]".bright_red().bold();
+        format!("{} {}", error_header, self)
     }
     fn deco_as_command(&self) -> ColoredString {
         self.to_string().bright_blue()
