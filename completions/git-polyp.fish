@@ -1,3 +1,4 @@
+# Warning: AI Generated content
 # Fish completion script for git-polyp
 # Installation:
 #   Copy this file to your Fish completions directory:

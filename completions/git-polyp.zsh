@@ -1,5 +1,6 @@
 #compdef git-polyp
 
+# Warning: AI Generated content
 # Zsh completion script for git-polyp
 # Installation:
 #   Copy this file to a directory in your $fpath with the name _git-polyp:
@@ -22,9 +23,9 @@ _git-polyp() {
 
     local -a rebase_flags
     rebase_flags=(
-        '--continue[Resume rebase after conflict resolution]'
-        '--abort[Cancel the rebase operation]'
-        '--undo[Restore the repository to its state before the rebase began]'
+        '--continue'
+        '--abort'
+        '--undo'
         '(-h --help)'{-h,--help}'[Show command help]'
     )
 

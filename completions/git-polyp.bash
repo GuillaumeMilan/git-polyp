@@ -1,3 +1,4 @@
+# Warning: AI Generated content
 # Bash completion script for git-polyp
 # Installation:
 #   Source this file in your ~/.bashrc or ~/.bash_profile:

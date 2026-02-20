@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Warning: AI Generated content
 # Installation script for git-polyp shell completions
 
 set -e
