@@ -30,6 +30,7 @@ pub fn run(
 fn run_continue() {
     match stack::Stack::load() {
         Ok(rebase_stack) => {
+            unwrap_rebase_result(continue_rebase(), &rebase_stack);
             perform_continue(&rebase_stack);
         }
         Err(_) => {
@@ -121,21 +122,11 @@ fn run_normal(base: Option<String>, upstream: String, branch: Option<String>) {
             stack::Stack::clean().unwrap_or_exit(&failed_to_clean_stack);
         }
     }
+    unwrap_rebase_result(perform_rebase(&rebase_stack), &rebase_stack);
     perform_continue(&rebase_stack);
 }
 
 fn perform_continue(rebase_stack: &stack::Stack) {
-    let rebase_error = messages::error::failed_to_clean_stack_after_rebase();
-
-    match perform_rebase(&rebase_stack) {
-        Ok(()) => (),
-        Err(()) => {
-            eprintln!("{}", messages::info::failed_to_perform_rebase());
-            stack::Stack::clean().unwrap_or_exit(&rebase_error);
-            std::process::exit(1);
-        }
-    }
-
     let failed_to_reset_stack_as_before = messages::error::failed_to_reset_stack_as_before();
 
     match set_new_stack(&rebase_stack) {
@@ -194,11 +185,44 @@ fn perform_continue(rebase_stack: &stack::Stack) {
     stack::Stack::clean().unwrap_or_exit(&failed_to_clean_stack);
 }
 
-fn perform_rebase(rebase_stack: &stack::Stack) -> Result<(), ()> {
-    client::checkout(&rebase_stack.destination_ref).map_err(|_| ())?;
-    client::cherry_pick(rebase_stack.base_ref(), rebase_stack.top_ref()).map_err(|_| ())?;
+enum RebaseResult {
+    Success,
+    CherryPickConflict,
+}
 
-    Ok(())
+fn perform_rebase(rebase_stack: &stack::Stack) -> Result<RebaseResult, ()> {
+    client::checkout(&rebase_stack.destination_ref).map_err(|_| ())?;
+    match client::cherry_pick(rebase_stack.base_ref(), rebase_stack.top_ref()) {
+        Ok(()) => Ok(RebaseResult::Success),
+        Err(_) => Ok(RebaseResult::CherryPickConflict),
+    }
+}
+
+fn continue_rebase() -> Result<RebaseResult, ()> {
+    match client::cherry_pick_continue() {
+        Ok(()) => Ok(RebaseResult::Success),
+        Err(_) => Ok(RebaseResult::CherryPickConflict),
+    }
+}
+
+fn unwrap_rebase_result(
+    result_with_rebase_result: Result<RebaseResult, ()>,
+    rebase_stack: &stack::Stack,
+) -> () {
+    match result_with_rebase_result {
+        Ok(RebaseResult::Success) => (),
+        Ok(RebaseResult::CherryPickConflict) => {
+            eprintln!("{}", messages::info::resolve_conflicts_and_continue());
+            std::process::exit(1);
+        }
+        Err(()) => {
+            let rebase_error = messages::error::failed_to_clean_stack_after_rebase();
+            eprintln!("{}", messages::info::failed_to_perform_rebase());
+            rebase_stack.apply().unwrap_or_exit(&rebase_error);
+            stack::Stack::clean().unwrap_or_exit(&rebase_error);
+            std::process::exit(1);
+        }
+    }
 }
 
 fn set_new_stack(rebase_stack: &stack::Stack) -> Result<(), ()> {

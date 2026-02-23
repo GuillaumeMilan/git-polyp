@@ -143,6 +143,12 @@ pub fn cherry_pick(commit_a: &str, commit_b: &str) -> Result<(), ClientError> {
     GitCommand::new(args).execute().map(|_| ())
 }
 
+pub fn cherry_pick_continue() -> Result<(), ClientError> {
+    GitCommand::new(vec!["cherry-pick".to_string(), "--continue".to_string()])
+        .execute()
+        .map(|_| ())
+}
+
 pub fn move_branche_at(commit_hash: &str, branch: &str) -> Result<(), ClientError> {
     GitCommand::new(vec![
         "branch".to_string(),

@@ -181,4 +181,18 @@ pub mod info {
     pub fn failed_to_set_new_stack() -> &'static str {
         "Failed to set the new stack. Cleaning...\n"
     }
+
+    pub fn resolve_conflicts_and_continue() -> String {
+        format!(
+            "{}\n\
+            Please resolve the conflicts, stage the changes, and run\n\
+                > {}\n\
+            to continue the rebase operation.\n
+            Or abort using:\n\
+                > {}\n",
+            "Cherry-pick conflict detected during the rebase operation!".deco_as_error(),
+            "`git-polyp rebase-stack --continue` ".deco_as_command(),
+            "`git-polyp rebase-stack --abort`".deco_as_command()
+        )
+    }
 }
