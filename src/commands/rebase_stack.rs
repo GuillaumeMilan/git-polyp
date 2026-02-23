@@ -156,9 +156,24 @@ fn perform_continue(rebase_stack: &stack::Stack) {
         .collect::<Vec<String>>()
         .join(" ");
 
-    let push_command = format!("git push origin {}", branches_str).deco_as_command();
+    let push_command =
+        format!("> git push origin --force-with-lease {}", branches_str).deco_as_command();
     let push_question = messages::info::ask_push_confirmation(push_command.to_string());
     let failed_to_clean_stack = messages::error::failed_to_clean_stack();
+
+    let end_on_branch = rebase_stack.top_branch();
+
+    match end_on_branch {
+        Some(branch) => {
+            client::switch(&branch)
+                .map_err(|_| {
+                    eprintln!("{}", messages::error::failed_to_switch_to_branch(&branch));
+                })
+                // In case of error just ignore and continue, the user will endup on the top commit of the stack
+                .unwrap_or(());
+        }
+        None => (),
+    }
 
     if false == YNQuestion::new(push_question).ask().unwrap_or(false) {
         stack::Stack::clean().unwrap_or_exit(&failed_to_clean_stack);
@@ -176,17 +191,7 @@ fn perform_continue(rebase_stack: &stack::Stack) {
         }
     }
 
-    let end_on_branch = rebase_stack.top_branch();
-
     stack::Stack::clean().unwrap_or_exit(&failed_to_clean_stack);
-
-    match end_on_branch {
-        Some(branch) => {
-            client::switch(&branch)
-                .unwrap_or_exit(&messages::error::failed_to_switch_to_branch(&branch));
-        }
-        None => (),
-    }
 }
 
 fn perform_rebase(rebase_stack: &stack::Stack) -> Result<(), ()> {

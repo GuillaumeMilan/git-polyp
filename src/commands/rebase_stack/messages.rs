@@ -159,7 +159,7 @@ pub mod info {
         format!(
             "Rebase successful. Do you want to push the new branches to '{}' ?\n\n\
             You can also push them later with the following command:\n\
-            {}\n\
+            {}\n\n\
             Push now ?",
             "origin".deco_as_command(),
             push_command
