@@ -129,6 +129,12 @@ pub fn checkout(revision: &str) -> Result<(), ClientError> {
         .map(|_| ())
 }
 
+pub fn switch(branch: &str) -> Result<(), ClientError> {
+    GitCommand::new(vec!["switch".to_string(), branch.to_string()])
+        .execute()
+        .map(|_| ())
+}
+
 pub fn cherry_pick(commit_a: &str, commit_b: &str) -> Result<(), ClientError> {
     let args = vec![
         "cherry-pick".to_string(),

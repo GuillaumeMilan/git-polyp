@@ -10,24 +10,24 @@ pub mod error {
     pub fn invalid_arguments() -> String {
         format!(
             "{}
-            See `{}` for more information.",
+            See `{}` for more information.\n",
             "Invalid arguments provided.".deco_as_error(),
             "git-polyp rebase-stack --help".deco_as_command()
         )
     }
 
     pub fn failed_to_verify_upstream() -> &'static str {
-        "Failed to verify the upstream. Make sure the provided upstream is correct and exists."
+        "Failed to verify the upstream. Make sure the provided upstream is correct and exists.\n"
     }
 
     pub fn failed_to_find_merge_base() -> &'static str {
-        "Failed to find the merge base between the upstream and the branch."
+        "Failed to find the merge base between the upstream and the branch.\n"
     }
 
     pub fn failed_to_verify_base() -> String {
         format!(
             "{}\n\
-            Please make sure the provided {} option is correct and exists.",
+            Please make sure the provided {} option is correct and exists.\n",
             "Failed to verify the --base option content.".deco_as_error(),
             "--base".deco_as_command()
         )
@@ -36,7 +36,7 @@ pub mod error {
     pub fn base_not_descendant_of_upstream() -> String {
         format!(
             "{}\n\
-            Please provide a {} base option that is a descendant of the upstream.",
+            Please provide a {} base option that is a descendant of the upstream.\n",
             "The provided --base option is not a descendant of the upstream.".deco_as_error(),
             "--base".deco_as_command()
         )
@@ -46,7 +46,7 @@ pub mod error {
         format!(
             "{}\n\
             Please make sure the provided upstream and branch are correct and exist, and that the --base option, if provided, is correct and exists.\n\
-            If the error persists, please check the state of your repository and try to fix it before running this command again.",
+            If the error persists, please check the state of your repository and try to fix it before running this command again.\n",
             "Failed to build the stack of commits to rebase.".deco_as_error()
         )
     }
@@ -55,7 +55,7 @@ pub mod error {
         format!(
             "{}\n\
             Please run `{}` to clean the stack.\n\
-            If the error persists, please try to remove the {} file manually.",
+            If the error persists, please try to remove the {} file manually.\n",
             "Failed to clean the stack state!".deco_as_error(),
             "git-polyp rebase-stack --abort".deco_as_command(),
             ".git/polyp/stack.json".deco_as_path()
@@ -66,7 +66,7 @@ pub mod error {
         format!(
             "{}\n\
             Please run `{}` to clean the stack.\n\
-            If the error persists, please try to remove the {} file manually.",
+            If the error persists, please try to remove the {} file manually.\n",
             "Failed to clean the stack!".deco_as_error(),
             "git-polyp rebase-stack --abort".deco_as_command(),
             ".git/polyp/stack.json".deco_as_path()
@@ -76,7 +76,7 @@ pub mod error {
     pub fn no_rebase_in_progress() -> String {
         format!(
             "{}\n\
-            Please make sure you have an ongoing rebase operation before running this command.",
+            Please make sure you have an ongoing rebase operation before running this command.\n",
             "No ongoing rebase operation found!".deco_as_error()
         )
     }
@@ -85,8 +85,9 @@ pub mod error {
         format!(
             "{}\n\
             Please try rerunnning`{}`.\n\
-            If the error persists, please try to restore the stack file with the backup file created during the rebase process, or remove the stack file manually if you don't have a backup.",
-            "Failed to undo the ongoing rebase as it was before running any command!".deco_as_error(),
+            If the error persists, please try to restore the stack file with the backup file created during the rebase process, or remove the stack file manually if you don't have a backup.\n",
+            "Failed to undo the ongoing rebase as it was before running any command!"
+                .deco_as_error(),
             "git-polyp rebase-stack --undo".deco_as_command(),
         )
     }
@@ -95,14 +96,14 @@ pub mod error {
         format!(
             "{}\n\
             Please run `{}` to reset the stack to its previous state.\n\
-            If the error persists, please try to restore the stack file with the backup file created during the rebase process, or remove the stack file manually if you don't have a backup.",
+            If the error persists, please try to restore the stack file with the backup file created during the rebase process, or remove the stack file manually if you don't have a backup.\n",
             "Failed to reset the stack as it was before!".deco_as_error(),
             "git-polyp rebase-stack --undo".deco_as_command(),
         )
     }
 
     pub fn failed_to_find_branch() -> String {
-        "Failed to find the current branch name. Make sure you are in a git repository."
+        "Failed to find the current branch name. Make sure you are in a git repository.\n"
             .deco_as_error()
             .to_string()
     }
@@ -111,10 +112,19 @@ pub mod error {
         format!(
             "{}\n\
             Please push the branches manually with the following command:\n\
-            {}",
+            {}\n",
             "Failed to push the new branches to the remote repository.".deco_as_error(),
             push_command
         )
+    }
+
+    pub fn failed_to_switch_to_branch(branch: &str) -> String {
+        let message = format!(
+            "Failed to switch to the branch `{}`",
+            branch.deco_as_command()
+        )
+        .deco_as_error();
+        format!("{}\n", message)
     }
 }
 
@@ -122,11 +132,11 @@ pub mod info {
     use super::Decorate;
 
     pub fn undoing_rebase() -> &'static str {
-        "Reseting your repository as it was before starting any rebase operation."
+        "Reseting your repository as it was before starting any rebase operation.\n"
     }
 
     pub fn rebase_undone() -> &'static str {
-        "Rebase undone. Your repository is now in the state it was before starting any rebase operation."
+        "Rebase undone. Your repository is now in the state it was before starting any rebase operation.\n"
     }
 
     pub fn rebase_in_progress() -> std::string::String {
@@ -134,7 +144,7 @@ pub mod info {
             "A rebase is already in progress.\n\
         Continue it with `{}`.\n\
         Abort it without doing any modification to the repository with `{}`.\n\
-        Abort by reseting the stack of commit to its version before any operation with `{}`.",
+        Abort by reseting the stack of commit to its version before any operation with `{}`.\n",
             "git-polyp rebase-stack --continue".deco_as_command(),
             "git-polyp rebase-stack --abort".deco_as_command(),
             "git-polyp rebase-stack --undo".deco_as_command()
@@ -147,9 +157,10 @@ pub mod info {
 
     pub fn ask_push_confirmation(push_command: String) -> String {
         format!(
-            "Rebase successful. Do you want to push the new branches to '{}' ?\n\
+            "Rebase successful. Do you want to push the new branches to '{}' ?\n\n\
             You can also push them later with the following command:\n\
-            {}",
+            {}\n\
+            Push now ?",
             "origin".deco_as_command(),
             push_command
         )
@@ -160,14 +171,14 @@ pub mod info {
     }
 
     pub fn failed_initialize_rebase() -> &'static str {
-        "Failed intiialize the rebase. Cleaning..."
+        "Failed intiialize the rebase. Cleaning...\n"
     }
 
     pub fn failed_to_perform_rebase() -> &'static str {
-        "Failed to perform the rebase. Cleaning..."
+        "Failed to perform the rebase. Cleaning...\n"
     }
 
     pub fn failed_to_set_new_stack() -> &'static str {
-        "Failed to set the new stack. Cleaning..."
+        "Failed to set the new stack. Cleaning...\n"
     }
 }

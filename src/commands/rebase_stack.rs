@@ -98,7 +98,10 @@ fn run_normal(base: Option<String>, upstream: String, branch: Option<String>) {
     }
     .unwrap_or_exit(&failed_to_build_stack);
 
-    println!("Stack\n-----\n{}", rebase_stack.format());
+    println!(
+        "\n\n{}\n\n",
+        rebase_stack.format_with_title("Current stack of commits")
+    );
     if false
         == YNQuestion::new(messages::info::ask_rebase_confirmation())
             .ask()
@@ -173,7 +176,17 @@ fn perform_continue(rebase_stack: &stack::Stack) {
         }
     }
 
+    let end_on_branch = rebase_stack.top_branch();
+
     stack::Stack::clean().unwrap_or_exit(&failed_to_clean_stack);
+
+    match end_on_branch {
+        Some(branch) => {
+            client::switch(&branch)
+                .unwrap_or_exit(&messages::error::failed_to_switch_to_branch(&branch));
+        }
+        None => (),
+    }
 }
 
 fn perform_rebase(rebase_stack: &stack::Stack) -> Result<(), ()> {
@@ -194,7 +207,10 @@ fn set_new_stack(rebase_stack: &stack::Stack) -> Result<(), ()> {
     let new_stack = new_stack
         .apply_branches_from(&rebase_stack)
         .map_err(|_| ())?;
-    println!("New stack\n-----\n{}", new_stack.format());
+    println!(
+        "\n\n{}\n\n",
+        rebase_stack.format_with_title("New stack of rebased commits")
+    );
     new_stack.apply().map_err(|_| ())?;
 
     Ok(())

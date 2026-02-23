@@ -75,6 +75,10 @@ impl Stack {
             .join("\n")
     }
 
+    pub fn format_with_title(&self, title: &str) -> String {
+        format!("{}\n\n{}", title.bold().underline(), self.format())
+    }
+
     pub fn exists() -> Result<bool, StackError> {
         let polyp_dir = client::polyp_dir().map_err(|_| StackError::CannotFindPolypDir)?;
         let stack_path = format!("{}/{}", polyp_dir, STACK_FILE);
@@ -156,6 +160,12 @@ impl Stack {
             .last()
             .map(|entry| &entry.commit)
             .expect("Stack should have at least one entry")
+    }
+
+    pub fn top_branch(&self) -> Option<String> {
+        self.entries
+            .last()
+            .and_then(|entry| entry.branches.first().cloned())
     }
 
     pub fn branches(&self) -> Vec<String> {
