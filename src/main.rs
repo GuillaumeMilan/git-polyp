@@ -51,8 +51,9 @@ fn main() {
             abort,
             undo,
             _continue,
+            verbose,
         } => {
-            commands::rebase_stack::run(_continue, abort, undo, base, upstream, branch);
+            commands::rebase_stack::run(_continue, abort, undo, base, upstream, branch, verbose);
         }
         commands::Commands::Unstack { from } => {
             println!("Unstack command called with from: {}", from);

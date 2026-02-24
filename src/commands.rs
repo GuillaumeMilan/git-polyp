@@ -18,6 +18,8 @@ pub enum Commands {
         undo: bool,
         #[arg(long, conflicts_with_all = &["base", "abort", "undo"])]
         _continue: bool,
+        #[arg(long)]
+        verbose: bool,
 
         #[arg(conflicts_with_all = &["abort", "undo", "_continue"])]
         upstream: Option<String>,
