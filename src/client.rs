@@ -1,4 +1,4 @@
-use crate::io::Decorate;
+use crate::io;
 use std::os::unix::process::ExitStatusExt;
 
 struct GitCommand {
@@ -147,10 +147,17 @@ pub fn branches_at(commit_hash: &str, verbose: &bool) -> Result<Vec<String>, Cli
     Ok(output.lines().map(|line| line.trim().to_string()).collect())
 }
 
-pub fn checkout(revision: &str, verbose: &bool) -> Result<(), ClientError> {
-    GitCommand::new(vec!["checkout".to_string(), revision.to_string()], verbose)
-        .execute()
-        .map(|_| ())
+pub fn switch_d(revision: &str, verbose: &bool) -> Result<(), ClientError> {
+    GitCommand::new(
+        vec![
+            "switch".to_string(),
+            "--detach".to_string(),
+            revision.to_string(),
+        ],
+        verbose,
+    )
+    .execute()
+    .map(|_| ())
 }
 
 pub fn switch(branch: &str, verbose: &bool) -> Result<(), ClientError> {
@@ -180,7 +187,7 @@ pub fn move_branche_at(commit_hash: &str, branch: &str, verbose: &bool) -> Resul
     GitCommand::new(
         vec![
             "branch".to_string(),
-            "-f".to_string(),
+            "--force".to_string(),
             branch.to_string(),
             commit_hash.to_string(),
         ],
@@ -208,9 +215,5 @@ pub fn push_branches(
 }
 
 fn print_command(args: &Vec<String>, verbose: &bool) {
-    if *verbose {
-        let command_args_str = args.iter().fold(String::new(), |acc, arg| acc + " " + arg);
-        let command_str = format!("> git {}", command_args_str).deco_as_command();
-        println!("[executing] {}", command_str);
-    }
+    io::execute(verbose, &format!("git {}", args.join(" ")));
 }

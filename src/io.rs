@@ -32,3 +32,15 @@ pub trait Decorate: std::fmt::Display {
 
 impl Decorate for String {}
 impl Decorate for &str {}
+
+pub fn explain(verbose: &bool, message: &str) {
+    if *verbose {
+        println!("[explain] {}", message);
+    }
+}
+
+pub fn execute(verbose: &bool, command: &str) {
+    if *verbose {
+        println!("[execute] > {}", command.deco_as_command());
+    }
+}

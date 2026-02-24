@@ -197,7 +197,7 @@ enum RebaseResult {
 }
 
 fn perform_rebase(rebase_stack: &stack::Stack, verbose: &bool) -> Result<RebaseResult, ()> {
-    client::checkout(&rebase_stack.destination_ref, verbose).map_err(|_| ())?;
+    client::switch_d(&rebase_stack.destination_ref, verbose).map_err(|_| ())?;
     match client::cherry_pick(rebase_stack.base_ref(), rebase_stack.top_ref(), verbose) {
         Ok(()) => Ok(RebaseResult::Success),
         Err(_) => Ok(RebaseResult::CherryPickConflict),
@@ -242,11 +242,11 @@ fn set_new_stack(rebase_stack: &stack::Stack, verbose: &bool) -> Result<(), ()> 
     )
     .map_err(|_| ())?;
     let new_stack = new_stack
-        .apply_branches_from(&rebase_stack)
+        .apply_branches_from(&rebase_stack, verbose)
         .map_err(|_| ())?;
     println!(
         "\n\n{}\n\n",
-        rebase_stack.format_with_title("New stack of rebased commits")
+        new_stack.format_with_title("New stack of rebased commits")
     );
     new_stack.apply(verbose).map_err(|_| ())?;
 

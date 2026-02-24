@@ -4,6 +4,8 @@ use std::fs;
 
 use crate::ResultExt;
 use crate::client;
+use crate::io;
+use crate::io::Decorate;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StackEntry {
@@ -81,23 +83,63 @@ impl Stack {
     }
 
     pub fn exists(verbose: &bool) -> Result<bool, StackError> {
+        io::explain(
+            verbose,
+            "Finding the git-polyp directory to check if a rebase stack file exists.",
+        );
         let polyp_dir = client::polyp_dir(verbose).map_err(|_| StackError::CannotFindPolypDir)?;
         let stack_path = format!("{}/{}", polyp_dir, STACK_FILE);
-        Ok(std::path::Path::new(&stack_path).exists())
+        io::explain(
+            verbose,
+            &format!(
+                "Checking if a rebase stack already exists by reading the cached stack file at {}.",
+                stack_path
+            ),
+        );
+        let stack_exists = std::path::Path::new(&stack_path).exists();
+        if stack_exists {
+            io::explain(verbose, "A rebase stack file already exists.");
+        } else {
+            io::explain(verbose, "No rebase stack file found.");
+        }
+        Ok(stack_exists)
     }
 
     pub fn persist(&self, verbose: &bool) -> Result<(), StackError> {
         let stack_data =
             serde_json::to_string(&self).map_err(|_| StackError::SerializationError)?;
+        io::explain(
+            verbose,
+            "Finding the git-polyp directory to persist the rebase stack.",
+        );
         let polyp_dir = client::polyp_dir(verbose).map_err(|_| StackError::CannotFindPolypDir)?;
         let stack_path = format!("{}/{}", polyp_dir, STACK_FILE);
+        io::explain(
+            verbose,
+            &format!(
+                "Persisting the rebase stack to the cached stack file at {}.",
+                stack_path
+            ),
+        );
         fs::write(stack_path, stack_data).map_err(|_| StackError::CannotWriteToFile)?;
+        io::explain(verbose, "Rebase stack persisted successfully.");
         return Ok(());
     }
 
     pub fn load(verbose: &bool) -> Result<Self, StackError> {
+        io::explain(
+            verbose,
+            "Finding the git-polyp directory to load the rebase stack.",
+        );
         let polyp_dir = client::polyp_dir(verbose).map_err(|_| StackError::CannotFindPolypDir)?;
         let stack_path = format!("{}/{}", polyp_dir, STACK_FILE);
+        io::explain(
+            verbose,
+            &format!(
+                "Loading the rebase stack from the cached stack file at {}.",
+                stack_path
+            ),
+        );
         let stack_data =
             fs::read_to_string(stack_path).map_err(|_| StackError::CannotReadFromFile)?;
         let stack: Stack =
@@ -106,8 +148,19 @@ impl Stack {
     }
 
     pub fn clean(verbose: &bool) -> Result<(), StackError> {
+        io::explain(
+            verbose,
+            "Finding the git-polyp directory to clean any existing rebase stack.",
+        );
         let polyp_dir = client::polyp_dir(verbose).map_err(|_| StackError::CannotFindPolypDir)?;
         let stack_path = format!("{}/{}", polyp_dir, STACK_FILE);
+        io::explain(
+            verbose,
+            &format!(
+                "Cleaning the rebase stack by removing the cached stack file at {}.",
+                stack_path
+            ),
+        );
         if std::path::Path::new(&stack_path).exists() {
             match fs::remove_file(stack_path) {
                 Ok(()) => Ok(()),
@@ -122,16 +175,25 @@ impl Stack {
     }
 
     pub fn apply(&self, verbose: &bool) -> Result<(), StackError> {
+        io::explain(
+            verbose,
+            "Applying the rebase stack by moving the branches to their corresponding commits in the provided stack.",
+        );
         for entry in self.entries.iter() {
             for branch in entry.branches.iter() {
                 client::move_branche_at(&entry.commit, &branch, verbose)
                     .map_err(|_| StackError::CannotApplyStack)?;
             }
         }
+        io::explain(verbose, "Rebase stack applied successfully.");
         Ok(())
     }
 
-    pub fn apply_branches_from(&self, other: &Stack) -> Result<Stack, StackError> {
+    pub fn apply_branches_from(&self, other: &Stack, verbose: &bool) -> Result<Stack, StackError> {
+        io::explain(
+            verbose,
+            "Applying the branches from the provided stack to the current stack by matching the commit messages of their entries.",
+        );
         let mut new_stack = self.clone();
         // Create a dictionnary mapping commit messages to branches for the other stack
         let branches_message_map = other
@@ -182,6 +244,12 @@ fn build_stack(
     branch: &str,
     verbose: &bool,
 ) -> Result<Vec<StackEntry>, client::ClientError> {
+    let explain_message = format!(
+        "Building the stack of commits to rebase from `{}` to `{}`",
+        upstream.deco_as_command(),
+        branch.deco_as_command()
+    );
+    io::explain(verbose, &explain_message);
     match client::rev_list(upstream, branch, verbose) {
         Ok(commits) => {
             let mut stack = Vec::new();
@@ -192,6 +260,10 @@ fn build_stack(
                     .unwrap_or_exit("Failed to get the commit message.");
                 stack.push(StackEntry::new(commit, branches, message));
             }
+            io::explain(
+                verbose,
+                &format!("Stack built with {} commits.", stack.len()),
+            );
             Ok(stack)
         }
         Err(e) => Err(e),
