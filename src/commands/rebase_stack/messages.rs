@@ -12,7 +12,7 @@ pub mod error {
             "{}
             See `{}` for more information.\n",
             "Invalid arguments provided.".deco_as_error(),
-            "git-polyp rebase-stack --help".deco_as_command()
+            "git-polyp rebase --help".deco_as_command()
         )
     }
 
@@ -57,7 +57,7 @@ pub mod error {
             Please run `{}` to clean the stack.\n\
             If the error persists, please try to remove the {} file manually.\n",
             "Failed to clean the stack state!".deco_as_error(),
-            "git-polyp rebase-stack --abort".deco_as_command(),
+            "git-polyp rebase --abort".deco_as_command(),
             ".git/polyp/stack.json".deco_as_path()
         )
     }
@@ -68,7 +68,7 @@ pub mod error {
             Please run `{}` to clean the stack.\n\
             If the error persists, please try to remove the {} file manually.\n",
             "Failed to clean the stack!".deco_as_error(),
-            "git-polyp rebase-stack --abort".deco_as_command(),
+            "git-polyp rebase --abort".deco_as_command(),
             ".git/polyp/stack.json".deco_as_path()
         )
     }
@@ -88,7 +88,7 @@ pub mod error {
             If the error persists, please try to restore the stack file with the backup file created during the rebase process, or remove the stack file manually if you don't have a backup.\n",
             "Failed to undo the ongoing rebase as it was before running any command!"
                 .deco_as_error(),
-            "git-polyp rebase-stack --undo".deco_as_command(),
+            "git-polyp rebase --undo".deco_as_command(),
         )
     }
 
@@ -98,7 +98,7 @@ pub mod error {
             Please run `{}` to reset the stack to its previous state.\n\
             If the error persists, please try to restore the stack file with the backup file created during the rebase process, or remove the stack file manually if you don't have a backup.\n",
             "Failed to reset the stack as it was before!".deco_as_error(),
-            "git-polyp rebase-stack --undo".deco_as_command(),
+            "git-polyp rebase --undo".deco_as_command(),
         )
     }
 
@@ -145,9 +145,9 @@ pub mod info {
         Continue it with `{}`.\n\
         Abort it without doing any modification to the repository with `{}`.\n\
         Abort by reseting the stack of commit to its version before any operation with `{}`.\n",
-            "git-polyp rebase-stack --continue".deco_as_command(),
-            "git-polyp rebase-stack --abort".deco_as_command(),
-            "git-polyp rebase-stack --undo".deco_as_command()
+            "git-polyp rebase --continue".deco_as_command(),
+            "git-polyp rebase --abort".deco_as_command(),
+            "git-polyp rebase --undo".deco_as_command()
         )
     }
 
@@ -191,8 +191,8 @@ pub mod info {
             Or abort using:\n\
                 > {}\n",
             "Cherry-pick conflict detected during the rebase operation!".deco_as_error(),
-            "`git-polyp rebase-stack --continue` ".deco_as_command(),
-            "`git-polyp rebase-stack --abort`".deco_as_command()
+            "`git-polyp rebase --continue` ".deco_as_command(),
+            "`git-polyp rebase --abort`".deco_as_command()
         )
     }
 }

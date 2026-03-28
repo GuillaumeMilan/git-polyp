@@ -4,7 +4,7 @@ This directory contains shell completion scripts for `git-polyp` that enable tab
 
 ## Features
 
-- ✅ Command completion (`rebase-stack`)
+- ✅ Command completion (`rebase`)
 - ✅ Flag completion (`--help`, `--version`, `--continue`, `--abort`)
 - ✅ Dynamic git branch name completion
 - ✅ Context-aware suggestions
@@ -110,24 +110,24 @@ Once installed, you can use tab completion with `git-polyp`:
 ### Command completion
 ```bash
 $ git-polyp <TAB>
-rebase-stack  --help  --version
+rebase  --help  --version
 ```
 
 ### Flag completion
 ```bash
-$ git-polyp rebase-stack --<TAB>
+$ git-polyp rebase --<TAB>
 --continue  --abort  --help
 ```
 
 ### Branch name completion
 ```bash
-$ git-polyp rebase-stack <TAB>
+$ git-polyp rebase <TAB>
 main  develop  feature-1  feature-2  bugfix-login
 ```
 
 ### Context-aware completion
 ```bash
-$ git-polyp rebase-stack main <TAB>
+$ git-polyp rebase main <TAB>
 # Suggests branches (excluding 'main' if you have smart completion)
 feature-1  feature-2  feature-3
 ```

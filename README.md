@@ -27,7 +27,7 @@ Download the latest release from the [releases page](https://github.com/youruser
 
 ## Commands
 
-### `rebase-stack` - Rebase a linear stack of branches
+### `rebase` - Rebase a linear stack of branches
 
 Automates rebasing a linear stack of local Git branches onto a specified upstream branch, handling conflicts, and allowing you to resume or abort the process.
 
@@ -35,25 +35,25 @@ Automates rebasing a linear stack of local Git branches onto a specified upstrea
 
 **Start a rebase:**
 ```bash
-git-polyp rebase-stack <upstream-branch> [target-branch]
+git-polyp rebase <upstream-branch> [target-branch]
 
 # With optional base specification
-git-polyp rebase-stack --base <base-branch> <upstream-branch> [target-branch]
+git-polyp rebase --base <base-branch> <upstream-branch> [target-branch]
 ```
 
 **Continue after resolving conflicts:**
 ```bash
-git-polyp rebase-stack --continue
+git-polyp rebase --continue
 ```
 
 **Abort the rebase:**
 ```bash
-git-polyp rebase-stack --abort
+git-polyp rebase --abort
 ```
 
 **Undo the rebase (restore to original state):**
 ```bash
-git-polyp rebase-stack --undo
+git-polyp rebase --undo
 ```
 
 #### Options
@@ -77,7 +77,7 @@ To rebase all three features onto an updated `main`:
 
 ```bash
 # Rebase the entire stack
-git-polyp rebase-stack main feature-3
+git-polyp rebase main feature-3
 
 # The tool will show a preview:
 #   Stack to rebase:
@@ -93,7 +93,7 @@ git-polyp rebase-stack main feature-3
 # 1. Resolve conflicts manually
 # 2. Stage changes: git add .
 # 3. Continue git rebase: git rebase --continue  
-# 4. Resume stack update: git-polyp rebase-stack --continue
+# 4. Resume stack update: git-polyp rebase --continue
 
 # After successful rebase, push branches:
 git push --force-with-lease origin feature-1
@@ -106,16 +106,16 @@ git push --force-with-lease origin feature-3
 **Using a custom base:**
 ```bash
 # Rebase only commits after a specific point
-git-polyp rebase-stack --base feature-1 main feature-3
+git-polyp rebase --base feature-1 main feature-3
 ```
 
 **Error recovery:**
 ```bash
 # If something goes wrong, restore original state
-git-polyp rebase-stack --undo
+git-polyp rebase --undo
 
 # Or just abort and clean up
-git-polyp rebase-stack --abort
+git-polyp rebase --abort
 ```
 
 #### How it works
@@ -186,7 +186,7 @@ src/
 ├── stack.rs            # Core stack manipulation logic
 └── commands/
     └── rebase_stack/
-        ├── mod.rs      # Main rebase-stack command implementation
+        ├── mod.rs      # Main rebase command implementation
         ├── messages.rs # User-facing messages and formatting
         └── stack.rs    # Stack data structures and persistence
 ```

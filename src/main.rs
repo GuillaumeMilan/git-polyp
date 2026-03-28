@@ -3,21 +3,6 @@ mod client;
 mod commands;
 mod io;
 
-#[derive(Parser, Debug)]
-enum Commands {
-    RebaseStack {
-        #[arg(short, long)]
-        base: Option<String>,
-
-        upstream: String,
-        // branch that needs to be rebased, if not provided, it will be the current branch.
-        branch: Option<String>,
-    },
-    Unstack {
-        from: String,
-    },
-}
-
 trait ResultExt<T, E> {
     fn unwrap_or_exit(self, error_message: &str) -> T;
 }
@@ -44,7 +29,7 @@ struct GitPolyp {
 fn main() {
     let args: GitPolyp = GitPolyp::parse();
     match args.command {
-        commands::Commands::RebaseStack {
+        commands::Commands::Rebase {
             base,
             upstream,
             branch,

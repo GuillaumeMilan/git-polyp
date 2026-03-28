@@ -9,7 +9,7 @@ pub enum Commands {
                 .required(true)
                 .args(&["upstream", "abort", "undo", "_continue"])
         )]
-    RebaseStack {
+    Rebase {
         #[arg(short, long, conflicts_with_all = &["abort", "undo", "_continue"])]
         base: Option<String>,
         #[arg(long, conflicts_with_all = &["base", "undo", "_continue"])]

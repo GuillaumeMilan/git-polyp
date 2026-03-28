@@ -12,7 +12,7 @@
 _git-polyp() {
     local -a commands
     commands=(
-        'rebase-stack:Rebase a stack of branches onto a new base'
+        'rebase:Rebase a stack of branches onto a new base'
     )
 
     local -a global_flags
@@ -45,7 +45,7 @@ _git-polyp() {
             ;;
         args)
             case $words[1] in
-                rebase-stack)
+                rebase)
                     # Check for --continue or --abort
                     if (( ${words[(I)--continue]} || ${words[(I)--abort]} )); then
                         # Don't suggest anything else if these flags are present
@@ -60,14 +60,14 @@ _git-polyp() {
                     if [[ $arg_count -le 2 ]]; then
                         # First positional arg (base-branch)
                         _describe -t branches 'base branch' branches
-                        _describe -t flags 'rebase-stack flags' rebase_flags
+                        _describe -t flags 'rebase flags' rebase_flags
                     elif [[ $arg_count -eq 3 ]]; then
                         # Second positional arg (target-branch)
                         _describe -t branches 'target branch' branches
-                        _describe -t flags 'rebase-stack flags' rebase_flags
+                        _describe -t flags 'rebase flags' rebase_flags
                     else
                         # Only flags after both positional args
-                        _describe -t flags 'rebase-stack flags' rebase_flags
+                        _describe -t flags 'rebase flags' rebase_flags
                     fi
                     ;;
             esac

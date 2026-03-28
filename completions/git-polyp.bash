@@ -22,7 +22,7 @@ _git_polyp_completion() {
         cword=$COMP_CWORD
     fi
 
-    local commands="rebase-stack"
+    local commands="rebase"
     local global_flags="--help -h --version -v"
     local rebase_flags="--continue --abort --help -h"
 
@@ -39,7 +39,7 @@ _git_polyp_completion() {
             ;;
         *)
             # Check what command we're completing for
-            if [[ "${words[1]}" == "rebase-stack" ]]; then
+            if [[ "${words[1]}" == "rebase" ]]; then
                 # Check if we already have flags
                 local has_continue=false
                 local has_abort=false

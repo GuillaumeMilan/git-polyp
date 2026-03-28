@@ -24,7 +24,7 @@ function __fish_git_polyp_arg_count
     echo $count
 end
 
-# Helper function to check if we're completing for rebase-stack command
+# Helper function to check if we're completing for rebase command
 function __fish_git_polyp_using_command
     set -l cmd (commandline -opc)
     return (contains -- $argv[1] $cmd)
@@ -36,17 +36,17 @@ function __fish_git_polyp_branches
 end
 
 # Global flags (only show if no command yet)
-complete -c git-polyp -n "not __fish_seen_subcommand_from rebase-stack" -s h -l help -d "Show help message"
-complete -c git-polyp -n "not __fish_seen_subcommand_from rebase-stack" -s v -l version -d "Show version information"
+complete -c git-polyp -n "not __fish_seen_subcommand_from rebase" -s h -l help -d "Show help message"
+complete -c git-polyp -n "not __fish_seen_subcommand_from rebase" -s v -l version -d "Show version information"
 
 # Commands
-complete -c git-polyp -n "not __fish_seen_subcommand_from rebase-stack" -a "rebase-stack" -d "Rebase a stack of branches onto a new base"
+complete -c git-polyp -n "not __fish_seen_subcommand_from rebase" -a "rebase" -d "Rebase a stack of branches onto a new base"
 
-# rebase-stack flags
-complete -c git-polyp -n "__fish_seen_subcommand_from rebase-stack" -l continue -d "Resume rebase after conflict resolution"
-complete -c git-polyp -n "__fish_seen_subcommand_from rebase-stack" -l abort -d "Cancel the rebase operation"
-complete -c git-polyp -n "__fish_seen_subcommand_from rebase-stack" -s h -l help -d "Show command help"
+# rebase flags
+complete -c git-polyp -n "__fish_seen_subcommand_from rebase" -l continue -d "Resume rebase after conflict resolution"
+complete -c git-polyp -n "__fish_seen_subcommand_from rebase" -l abort -d "Cancel the rebase operation"
+complete -c git-polyp -n "__fish_seen_subcommand_from rebase" -s h -l help -d "Show command help"
 
-# Branch name completions for rebase-stack
+# Branch name completions for rebase
 # Only suggest branches if --continue or --abort are not present
-complete -c git-polyp -n "__fish_seen_subcommand_from rebase-stack; and not __fish_git_polyp_has_flag --continue; and not __fish_git_polyp_has_flag --abort" -a "(__fish_git_polyp_branches)" -d "Branch"
+complete -c git-polyp -n "__fish_seen_subcommand_from rebase; and not __fish_git_polyp_has_flag --continue; and not __fish_git_polyp_has_flag --abort" -a "(__fish_git_polyp_branches)" -d "Branch"

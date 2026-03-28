@@ -22,7 +22,7 @@ pub fn run(
             // We should never enter this case (as clap should prevent it with the
             // conflicts_with_all and arg_required_else_help settings)
             eprintln!("{}", messages::error::invalid_arguments());
-            // TODO execute equivalent of rebase-stack --help
+            // TODO execute equivalent of rebase --help
             std::process::exit(1);
         }
     }
