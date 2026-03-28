@@ -44,5 +44,8 @@ fn main() {
             println!("Unstack command called with from: {}", from);
             // Here you would implement the logic to perform the unstack operation
         }
+        commands::Commands::Worktree(args) => {
+            commands::worktree::run(args, false);
+        }
     }
 }

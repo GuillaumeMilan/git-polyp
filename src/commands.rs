@@ -1,4 +1,5 @@
 pub mod rebase_stack;
+pub mod worktree;
 use clap::Parser;
 
 #[derive(Parser, Debug)]
@@ -29,4 +30,6 @@ pub enum Commands {
     Unstack {
         from: String,
     },
+    /// Manage git-polyp worktree workspaces
+    Worktree(worktree::WorktreeArgs),
 }
