@@ -47,5 +47,8 @@ fn main() {
         commands::Commands::Worktree(args) => {
             commands::worktree::run(args, false);
         }
+        commands::Commands::Completions { shell } => {
+            commands::completions::run(shell);
+        }
     }
 }
