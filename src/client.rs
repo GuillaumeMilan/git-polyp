@@ -285,10 +285,12 @@ pub fn worktree_remove(path: &str, force: bool, verbose: &bool) -> Result<(), Cl
     GitCommand::new(args, verbose).execute().map(|_| ())
 }
 
-/// Check if a branch exists (locally or remotely)
+/// Check if a branch exists locally (refs/heads only).
+///
+/// Use `remote_branch_exists` to check the remote, and `fetch_branch`
+/// to create a local ref from a remote-only branch.
 pub fn branch_exists(branch: &str, verbose: &bool) -> Result<bool, ClientError> {
-    // Check local branch
-    let local_check = GitCommand::new(
+    let result = GitCommand::new(
         vec![
             "show-ref".to_string(),
             "--verify".to_string(),
@@ -299,23 +301,7 @@ pub fn branch_exists(branch: &str, verbose: &bool) -> Result<bool, ClientError> 
     )
     .execute();
 
-    if local_check.is_ok() {
-        return Ok(true);
-    }
-
-    // Check remote branch
-    let remote_check = GitCommand::new(
-        vec![
-            "show-ref".to_string(),
-            "--verify".to_string(),
-            "--quiet".to_string(),
-            format!("refs/remotes/origin/{}", branch),
-        ],
-        verbose,
-    )
-    .execute();
-
-    Ok(remote_check.is_ok())
+    Ok(result.is_ok())
 }
 
 /// Delete a branch
@@ -385,19 +371,18 @@ pub fn detect_main_branch(verbose: &bool) -> Result<String, ClientError> {
 
 /// Check if a worktree has uncommitted changes
 pub fn worktree_is_dirty(path: &str, verbose: &bool) -> Result<bool, ClientError> {
-    let output = std::process::Command::new("git")
-        .args(&["-C", path, "status", "--porcelain"])
-        .output()
-        .map_err(|_| ClientError::Command)?;
+    let output = GitCommand::new(
+        vec![
+            "-C".to_string(),
+            path.to_string(),
+            "status".to_string(),
+            "--porcelain".to_string(),
+        ],
+        verbose,
+    )
+    .execute()?;
 
-    if !output.status.success() {
-        return Err(ClientError::NonZeroExitCode);
-    }
-
-    let stdout = String::from_utf8(output.stdout).map_err(|_| ClientError::InvalidUtf8)?;
-    print_command(&vec!["-C".to_string(), path.to_string(), "status".to_string(), "--porcelain".to_string()], verbose);
-
-    Ok(!stdout.trim().is_empty())
+    Ok(!output.is_empty())
 }
 
 /// Get ahead/behind count for a branch relative to its upstream
