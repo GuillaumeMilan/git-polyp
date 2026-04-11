@@ -2,6 +2,7 @@ pub mod detect;
 pub mod metadata;
 
 use crate::client;
+use crate::error::AppError;
 use crate::io::{Decorate, YNQuestion};
 use clap::{Parser, Subcommand};
 use colored::Colorize;
@@ -59,16 +60,16 @@ pub enum WorktreeCommands {
     Check,
 }
 
-pub fn run(args: WorktreeArgs, verbose: bool) {
+pub fn run(args: WorktreeArgs, verbose: bool) -> Result<(), AppError> {
     match args.command {
         WorktreeCommands::Init { url, path } => {
-            run_init(&url, path.as_deref(), verbose);
+            run_init(&url, path.as_deref(), verbose)?;
         }
         WorktreeCommands::Convert => {
-            run_convert(verbose);
+            run_convert(verbose)?;
         }
         WorktreeCommands::Add { branch, base } => {
-            run_add(&branch, base.as_deref(), verbose);
+            run_add(&branch, base.as_deref(), verbose)?;
         }
         WorktreeCommands::Clean {
             branch,
@@ -76,21 +77,22 @@ pub fn run(args: WorktreeArgs, verbose: bool) {
             delete_branch,
             keep_branch,
         } => {
-            run_clean(&branch, force, delete_branch, keep_branch, verbose);
+            run_clean(&branch, force, delete_branch, keep_branch, verbose)?;
         }
         WorktreeCommands::List => {
-            run_list(verbose);
+            run_list(verbose)?;
         }
         WorktreeCommands::Switch { branch } => {
-            run_switch(&branch, verbose);
+            run_switch(&branch, verbose)?;
         }
         WorktreeCommands::Prune => {
-            run_prune(verbose);
+            run_prune(verbose)?;
         }
         WorktreeCommands::Check => {
-            run_check(verbose);
+            run_check(verbose)?;
         }
     }
+    Ok(())
 }
 
 /// Extract repository name from a URL or path
@@ -105,15 +107,14 @@ fn extract_repo_name(url: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-fn run_init(url: &str, path: Option<&str>, verbose: bool) {
+fn run_init(url: &str, path: Option<&str>, verbose: bool) -> Result<(), AppError> {
     // Determine destination path
     let dest_name = match path {
         Some(p) => p.to_string(),
         None => match extract_repo_name(url) {
             Some(name) => name,
             None => {
-                eprintln!("{}", "Could not extract repository name from URL. Please specify a destination path.".deco_as_error());
-                std::process::exit(1);
+                return Err(AppError::Message("Could not extract repository name from URL. Please specify a destination path.".deco_as_error()));
             }
         },
     };
@@ -122,20 +123,16 @@ fn run_init(url: &str, path: Option<&str>, verbose: bool) {
 
     // Check if destination already exists
     if dest_path.exists() {
-        eprintln!(
-            "{}",
-            format!("Destination '{}' already exists.", dest_name).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Destination '{}' already exists.", dest_name).deco_as_error(),
+        ));
     }
 
     // Create the workspace directory
     if let Err(e) = std::fs::create_dir_all(dest_path) {
-        eprintln!(
-            "{}",
-            format!("Failed to create directory '{}': {}", dest_name, e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to create directory '{}': {}", dest_name, e).deco_as_error(),
+        ));
     }
 
     // Clone as bare repo into .bare
@@ -148,33 +145,27 @@ fn run_init(url: &str, path: Option<&str>, verbose: bool) {
     if let Err(e) = client::clone_bare(url, bare_path.to_str().unwrap(), verbose) {
         // Clean up on failure
         let _ = std::fs::remove_dir_all(dest_path);
-        eprintln!(
-            "{}",
-            format!("Failed to clone repository: {:?}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to clone repository: {:?}", e).deco_as_error(),
+        ));
     }
 
     // Create .template directory
     let template_path = dest_path.join(".template");
     if let Err(e) = std::fs::create_dir(&template_path) {
         let _ = std::fs::remove_dir_all(dest_path);
-        eprintln!(
-            "{}",
-            format!("Failed to create .template directory: {}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to create .template directory: {}", e).deco_as_error(),
+        ));
     }
 
     // Change to bare repo directory to detect main branch
     let original_dir = std::env::current_dir().unwrap();
     if let Err(e) = std::env::set_current_dir(&bare_path) {
         let _ = std::fs::remove_dir_all(dest_path);
-        eprintln!(
-            "{}",
-            format!("Failed to change to bare repo directory: {}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to change to bare repo directory: {}", e).deco_as_error(),
+        ));
     }
 
     // Detect main branch
@@ -190,11 +181,9 @@ fn run_init(url: &str, path: Option<&str>, verbose: bool) {
     if let Err(e) = client::detach_head(verbose) {
         let _ = std::env::set_current_dir(&original_dir);
         let _ = std::fs::remove_dir_all(dest_path);
-        eprintln!(
-            "{}",
-            format!("Failed to detach HEAD in bare repo: {:?}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to detach HEAD in bare repo: {:?}", e).deco_as_error(),
+        ));
     }
 
     // Change back to original directory
@@ -206,21 +195,17 @@ fn run_init(url: &str, path: Option<&str>, verbose: bool) {
 
     if let Err(e) = metadata.save(dest_path) {
         let _ = std::fs::remove_dir_all(dest_path);
-        eprintln!(
-            "{}",
-            format!("Failed to create metadata file: {:?}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to create metadata file: {:?}", e).deco_as_error(),
+        ));
     }
 
     // Change to bare repo directory for worktree operations
     if let Err(e) = std::env::set_current_dir(&bare_path) {
         let _ = std::fs::remove_dir_all(dest_path);
-        eprintln!(
-            "{}",
-            format!("Failed to change to workspace directory: {}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to change to workspace directory: {}", e).deco_as_error(),
+        ));
     }
 
     // Create worktree for main branch
@@ -235,11 +220,9 @@ fn run_init(url: &str, path: Option<&str>, verbose: bool) {
     if let Err(e) = client::worktree_add(main_worktree_path_str, &main_branch, verbose) {
         let _ = std::env::set_current_dir(&original_dir);
         let _ = std::fs::remove_dir_all(dest_path);
-        eprintln!(
-            "{}",
-            format!("Failed to create worktree for main branch: {:?}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to create worktree for main branch: {:?}", e).deco_as_error(),
+        ));
     }
 
     // Change back to original directory
@@ -269,54 +252,38 @@ fn run_init(url: &str, path: Option<&str>, verbose: bool) {
     );
     println!("\nTo get started:");
     println!("  cd {}/{}", dest_name, main_branch);
+    Ok(())
 }
 
-fn run_convert(verbose: bool) {
-    let current_dir = match std::env::current_dir() {
-        Ok(dir) => dir,
-        Err(e) => {
-            eprintln!(
-                "{}",
-                format!("Failed to get current directory: {}", e).deco_as_error()
-            );
-            std::process::exit(1);
-        }
-    };
+fn run_convert(verbose: bool) -> Result<(), AppError> {
+    let current_dir = std::env::current_dir().map_err(|e| {
+        AppError::Message(format!("Failed to get current directory: {}", e).deco_as_error())
+    })?;
 
     // Check if we're already in a worktree workspace
     if detect::is_worktree_root(&current_dir) {
-        eprintln!(
-            "{}",
-            "Already in a git-polyp worktree workspace.".deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            "Already in a git-polyp worktree workspace.".deco_as_error(),
+        ));
     }
 
     // Check if .git exists (we're in a git repo root)
     let git_dir = current_dir.join(".git");
     if !git_dir.exists() {
-        eprintln!(
-            "{}",
+        return Err(AppError::Message(
             "Not in a git repository root. The .git directory must exist in the current directory."
-                .deco_as_error()
-        );
-        std::process::exit(1);
+                .deco_as_error(),
+        ));
     }
 
     // Check if .git is a directory (not a worktree pointer file)
     if !git_dir.is_dir() {
-        eprintln!("{}", "This appears to be a git worktree, not a main repository. Please run convert from the main repository.".deco_as_error());
-        std::process::exit(1);
+        return Err(AppError::Message("This appears to be a git worktree, not a main repository. Please run convert from the main repository.".deco_as_error()));
     }
 
     // Get current branch
-    let current_branch = match client::current_branch(verbose) {
-        Ok(branch) => branch,
-        Err(_) => {
-            eprintln!("{}", "Failed to determine current branch.".deco_as_error());
-            std::process::exit(1);
-        }
-    };
+    let current_branch = client::current_branch(verbose)
+        .map_err(|_| AppError::Message("Failed to determine current branch.".deco_as_error()))?;
 
     // Detect main branch (might be different from current branch)
     let main_branch = match client::detect_main_branch(verbose) {
@@ -342,11 +309,9 @@ fn run_convert(verbose: bool) {
             })
             .collect(),
         Err(e) => {
-            eprintln!(
-                "{}",
-                format!("Failed to read directory: {}", e).deco_as_error()
-            );
-            std::process::exit(1);
+            return Err(AppError::Message(
+                format!("Failed to read directory: {}", e).deco_as_error(),
+            ));
         }
     };
 
@@ -359,11 +324,9 @@ fn run_convert(verbose: bool) {
     let bare_path = current_dir.join(".bare");
 
     if let Err(e) = std::fs::rename(&git_dir, &bare_path) {
-        eprintln!(
-            "{}",
-            format!("Failed to move .git to .bare: {}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to move .git to .bare: {}", e).deco_as_error(),
+        ));
     }
 
     // Update the bare repo config
@@ -388,11 +351,9 @@ fn run_convert(verbose: bool) {
     if let Err(e) = std::fs::create_dir(&worktree_dir) {
         // Restore .git on failure
         let _ = std::fs::rename(&bare_path, &git_dir);
-        eprintln!(
-            "{}",
-            format!("Failed to create worktree directory: {}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to create worktree directory: {}", e).deco_as_error(),
+        ));
     }
 
     // Step 4: Move all files into the worktree directory
@@ -431,11 +392,9 @@ fn run_convert(verbose: bool) {
     // Step 7: Setup the worktree properly with git
     // Change to .bare directory to run git worktree commands
     if let Err(e) = std::env::set_current_dir(&bare_path) {
-        eprintln!(
-            "{}",
-            format!("Failed to change to .bare directory: {}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to change to .bare directory: {}", e).deco_as_error(),
+        ));
     }
 
     // Create a .git file in the worktree that points to the bare repo
@@ -527,33 +486,22 @@ fn run_convert(verbose: bool) {
     );
     println!("\nTo get started:");
     println!("  cd {}", main_branch);
+    Ok(())
 }
 
-fn run_add(branch: &str, base: Option<&str>, verbose: bool) {
+fn run_add(branch: &str, base: Option<&str>, verbose: bool) -> Result<(), AppError> {
     // Find worktree root
-    let worktree_root = match detect::find_worktree_root() {
-        Ok(root) => root,
-        Err(_) => {
-            eprintln!(
-                "{}",
-                "Not in a git-polyp worktree workspace. Run 'git-polyp worktree init' first."
-                    .deco_as_error()
-            );
-            std::process::exit(1);
-        }
-    };
+    let worktree_root = detect::find_worktree_root().map_err(|_| {
+        AppError::Message(
+            "Not in a git-polyp worktree workspace. Run 'git-polyp worktree init' first."
+                .deco_as_error(),
+        )
+    })?;
 
     // Load metadata
-    let mut metadata = match metadata::WorktreeMetadata::load(&worktree_root) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!(
-                "{}",
-                format!("Failed to load metadata: {:?}", e).deco_as_error()
-            );
-            std::process::exit(1);
-        }
-    };
+    let mut metadata = metadata::WorktreeMetadata::load(&worktree_root).map_err(|e| {
+        AppError::Message(format!("Failed to load metadata: {:?}", e).deco_as_error())
+    })?;
 
     // Check if worktree already exists
     if metadata.has_worktree(branch) {
@@ -561,7 +509,7 @@ fn run_add(branch: &str, base: Option<&str>, verbose: bool) {
             "Worktree for branch '{}' already exists.",
             branch.bright_cyan()
         );
-        std::process::exit(0);
+        return Ok(());
     }
 
     // Get bare repo path and change to it for git operations
@@ -569,11 +517,9 @@ fn run_add(branch: &str, base: Option<&str>, verbose: bool) {
     let original_dir = std::env::current_dir().unwrap();
 
     if let Err(e) = std::env::set_current_dir(&bare_path) {
-        eprintln!(
-            "{}",
-            format!("Failed to change to bare repo directory: {}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to change to bare repo directory: {}", e).deco_as_error(),
+        ));
     }
 
     // Determine the base ref for new branches
@@ -586,11 +532,9 @@ fn run_add(branch: &str, base: Option<&str>, verbose: bool) {
         Ok(exists) => exists,
         Err(e) => {
             let _ = std::env::set_current_dir(&original_dir);
-            eprintln!(
-                "{}",
-                format!("Failed to check if branch exists: {:?}", e).deco_as_error()
-            );
-            std::process::exit(1);
+            return Err(AppError::Message(
+                format!("Failed to check if branch exists: {:?}", e).deco_as_error(),
+            ));
         }
     };
 
@@ -609,11 +553,9 @@ fn run_add(branch: &str, base: Option<&str>, verbose: bool) {
         println!("Fetching branch '{}' from remote...", branch.bright_cyan());
         if let Err(e) = client::fetch_branch(branch, verbose) {
             let _ = std::env::set_current_dir(&original_dir);
-            eprintln!(
-                "{}",
-                format!("Failed to fetch branch from remote: {:?}", e).deco_as_error()
-            );
-            std::process::exit(1);
+            return Err(AppError::Message(
+                format!("Failed to fetch branch from remote: {:?}", e).deco_as_error(),
+            ));
         }
     }
 
@@ -629,11 +571,9 @@ fn run_add(branch: &str, base: Option<&str>, verbose: bool) {
         );
         if let Err(e) = client::worktree_add(worktree_path_str, branch, verbose) {
             let _ = std::env::set_current_dir(&original_dir);
-            eprintln!(
-                "{}",
-                format!("Failed to create worktree: {:?}", e).deco_as_error()
-            );
-            std::process::exit(1);
+            return Err(AppError::Message(
+                format!("Failed to create worktree: {:?}", e).deco_as_error(),
+            ));
         }
         println!(
             "{}",
@@ -650,11 +590,9 @@ fn run_add(branch: &str, base: Option<&str>, verbose: bool) {
             client::worktree_add_new_branch(worktree_path_str, branch, &base_ref, verbose)
         {
             let _ = std::env::set_current_dir(&original_dir);
-            eprintln!(
-                "{}",
-                format!("Failed to create worktree with new branch: {:?}", e).deco_as_error()
-            );
-            std::process::exit(1);
+            return Err(AppError::Message(
+                format!("Failed to create worktree with new branch: {:?}", e).deco_as_error(),
+            ));
         }
         println!(
             "{}",
@@ -678,49 +616,37 @@ fn run_add(branch: &str, base: Option<&str>, verbose: bool) {
     }
 
     println!("\nWorktree location: {}", worktree_path_str.bright_blue());
+    Ok(())
 }
 
-fn run_clean(branch: &str, force: bool, delete_branch: bool, keep_branch: bool, verbose: bool) {
+fn run_clean(
+    branch: &str,
+    force: bool,
+    delete_branch: bool,
+    keep_branch: bool,
+    verbose: bool,
+) -> Result<(), AppError> {
     // Find worktree root
-    let worktree_root = match detect::find_worktree_root() {
-        Ok(root) => root,
-        Err(_) => {
-            eprintln!(
-                "{}",
-                "Not in a git-polyp worktree workspace.".deco_as_error()
-            );
-            std::process::exit(1);
-        }
-    };
+    let worktree_root = detect::find_worktree_root()
+        .map_err(|_| AppError::Message("Not in a git-polyp worktree workspace.".deco_as_error()))?;
 
     // Load metadata
-    let mut metadata = match metadata::WorktreeMetadata::load(&worktree_root) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!(
-                "{}",
-                format!("Failed to load metadata: {:?}", e).deco_as_error()
-            );
-            std::process::exit(1);
-        }
-    };
+    let mut metadata = metadata::WorktreeMetadata::load(&worktree_root).map_err(|e| {
+        AppError::Message(format!("Failed to load metadata: {:?}", e).deco_as_error())
+    })?;
 
     // Check if this is the main branch
     if branch == metadata.main_branch {
-        eprintln!(
-            "{}",
-            format!("Cannot remove the main branch worktree '{}'.", branch).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Cannot remove the main branch worktree '{}'.", branch).deco_as_error(),
+        ));
     }
 
     // Check if worktree exists in metadata
     if !metadata.has_worktree(branch) {
-        eprintln!(
-            "{}",
-            format!("Worktree '{}' not found.", branch).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Worktree '{}' not found.", branch).deco_as_error(),
+        ));
     }
 
     // Get worktree path
@@ -732,15 +658,13 @@ fn run_clean(branch: &str, force: bool, delete_branch: bool, keep_branch: bool, 
         match client::worktree_is_dirty(worktree_path_str, verbose) {
             Ok(true) => {
                 if !force {
-                    eprintln!(
-                        "{}",
+                    return Err(AppError::Message(
                         format!(
                             "Worktree '{}' has uncommitted changes. Use --force to remove anyway.",
                             branch
                         )
-                        .deco_as_error()
-                    );
-                    std::process::exit(1);
+                        .deco_as_error(),
+                    ));
                 }
                 println!(
                     "{}",
@@ -749,11 +673,9 @@ fn run_clean(branch: &str, force: bool, delete_branch: bool, keep_branch: bool, 
             }
             Ok(false) => {}
             Err(e) => {
-                eprintln!(
-                    "{}",
-                    format!("Failed to check worktree status: {:?}", e).deco_as_error()
-                );
-                std::process::exit(1);
+                return Err(AppError::Message(
+                    format!("Failed to check worktree status: {:?}", e).deco_as_error(),
+                ));
             }
         }
     }
@@ -763,22 +685,18 @@ fn run_clean(branch: &str, force: bool, delete_branch: bool, keep_branch: bool, 
     let original_dir = std::env::current_dir().unwrap();
 
     if let Err(e) = std::env::set_current_dir(&bare_path) {
-        eprintln!(
-            "{}",
-            format!("Failed to change to bare repo directory: {}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to change to bare repo directory: {}", e).deco_as_error(),
+        ));
     }
 
     // Remove worktree
     println!("Removing worktree '{}'...", branch.bright_cyan());
     if let Err(e) = client::worktree_remove(worktree_path_str, force, verbose) {
         let _ = std::env::set_current_dir(&original_dir);
-        eprintln!(
-            "{}",
-            format!("Failed to remove worktree: {:?}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to remove worktree: {:?}", e).deco_as_error(),
+        ));
     }
 
     // Update metadata
@@ -813,11 +731,9 @@ fn run_clean(branch: &str, force: bool, delete_branch: bool, keep_branch: bool, 
     if should_delete_branch {
         // Change back to bare repo for branch deletion
         if let Err(e) = std::env::set_current_dir(&bare_path) {
-            eprintln!(
-                "{}",
-                format!("Failed to change to bare repo directory: {}", e).deco_as_error()
-            );
-            std::process::exit(1);
+            return Err(AppError::Message(
+                format!("Failed to change to bare repo directory: {}", e).deco_as_error(),
+            ));
         }
 
         if let Err(e) = client::delete_branch(branch, force, verbose) {
@@ -831,43 +747,27 @@ fn run_clean(branch: &str, force: bool, delete_branch: bool, keep_branch: bool, 
             println!("{}", format!("Deleted branch '{}'", branch).bright_green());
         }
     }
+    Ok(())
 }
 
-fn run_list(verbose: bool) {
+fn run_list(verbose: bool) -> Result<(), AppError> {
     // Find worktree root
-    let worktree_root = match detect::find_worktree_root() {
-        Ok(root) => root,
-        Err(_) => {
-            eprintln!(
-                "{}",
-                "Not in a git-polyp worktree workspace.".deco_as_error()
-            );
-            std::process::exit(1);
-        }
-    };
+    let worktree_root = detect::find_worktree_root()
+        .map_err(|_| AppError::Message("Not in a git-polyp worktree workspace.".deco_as_error()))?;
 
     // Load metadata
-    let metadata = match metadata::WorktreeMetadata::load(&worktree_root) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!(
-                "{}",
-                format!("Failed to load metadata: {:?}", e).deco_as_error()
-            );
-            std::process::exit(1);
-        }
-    };
+    let metadata = metadata::WorktreeMetadata::load(&worktree_root).map_err(|e| {
+        AppError::Message(format!("Failed to load metadata: {:?}", e).deco_as_error())
+    })?;
 
     // Change to bare repo for git operations
     let bare_path = detect::get_bare_repo_path(&worktree_root);
     let original_dir = std::env::current_dir().unwrap();
 
     if let Err(e) = std::env::set_current_dir(&bare_path) {
-        eprintln!(
-            "{}",
-            format!("Failed to change to bare repo directory: {}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to change to bare repo directory: {}", e).deco_as_error(),
+        ));
     }
 
     println!(
@@ -946,32 +846,18 @@ fn run_list(verbose: bool) {
     }
 
     let _ = std::env::set_current_dir(&original_dir);
+    Ok(())
 }
 
-fn run_switch(branch: &str, verbose: bool) {
+fn run_switch(branch: &str, verbose: bool) -> Result<(), AppError> {
     // Find worktree root
-    let worktree_root = match detect::find_worktree_root() {
-        Ok(root) => root,
-        Err(_) => {
-            eprintln!(
-                "{}",
-                "Not in a git-polyp worktree workspace.".deco_as_error()
-            );
-            std::process::exit(1);
-        }
-    };
+    let worktree_root = detect::find_worktree_root()
+        .map_err(|_| AppError::Message("Not in a git-polyp worktree workspace.".deco_as_error()))?;
 
     // Load metadata to verify the worktree exists
-    let mut metadata = match metadata::WorktreeMetadata::load(&worktree_root) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!(
-                "{}",
-                format!("Failed to load metadata: {:?}", e).deco_as_error()
-            );
-            std::process::exit(1);
-        }
-    };
+    let mut metadata = metadata::WorktreeMetadata::load(&worktree_root).map_err(|e| {
+        AppError::Message(format!("Failed to load metadata: {:?}", e).deco_as_error())
+    })?;
 
     // If worktree doesn't exist yet, try to create it from remote
     if !metadata.has_worktree(branch) {
@@ -979,11 +865,9 @@ fn run_switch(branch: &str, verbose: bool) {
         let original_dir = std::env::current_dir().unwrap();
 
         if let Err(e) = std::env::set_current_dir(&bare_path) {
-            eprintln!(
-                "{}",
-                format!("Failed to change to bare repo directory: {}", e).deco_as_error()
-            );
-            std::process::exit(1);
+            return Err(AppError::Message(
+                format!("Failed to change to bare repo directory: {}", e).deco_as_error(),
+            ));
         }
 
         // Check if branch exists locally
@@ -1004,11 +888,9 @@ fn run_switch(branch: &str, verbose: bool) {
 
         if !local_exists && !remote_exists {
             let _ = std::env::set_current_dir(&original_dir);
-            eprintln!(
-                "{}",
-                format!("Branch '{}' not found locally or on remote.", branch).deco_as_error()
-            );
-            std::process::exit(1);
+            return Err(AppError::Message(
+                format!("Branch '{}' not found locally or on remote.", branch).deco_as_error(),
+            ));
         }
 
         // Fetch from remote if needed
@@ -1016,11 +898,9 @@ fn run_switch(branch: &str, verbose: bool) {
             eprintln!("Fetching branch '{}' from remote...", branch.bright_cyan());
             if let Err(e) = client::fetch_branch(branch, verbose) {
                 let _ = std::env::set_current_dir(&original_dir);
-                eprintln!(
-                    "{}",
-                    format!("Failed to fetch branch from remote: {:?}", e).deco_as_error()
-                );
-                std::process::exit(1);
+                return Err(AppError::Message(
+                    format!("Failed to fetch branch from remote: {:?}", e).deco_as_error(),
+                ));
             }
         }
 
@@ -1031,11 +911,9 @@ fn run_switch(branch: &str, verbose: bool) {
         eprintln!("Creating worktree for branch '{}'...", branch.bright_cyan());
         if let Err(e) = client::worktree_add(worktree_path_str, branch, verbose) {
             let _ = std::env::set_current_dir(&original_dir);
-            eprintln!(
-                "{}",
-                format!("Failed to create worktree: {:?}", e).deco_as_error()
-            );
-            std::process::exit(1);
+            return Err(AppError::Message(
+                format!("Failed to create worktree: {:?}", e).deco_as_error(),
+            ));
         }
 
         // Update metadata
@@ -1060,49 +938,32 @@ fn run_switch(branch: &str, verbose: bool) {
 
     // Check if the directory actually exists
     if !worktree_path.exists() {
-        eprintln!("{}", format!("Worktree directory '{}' does not exist. Run 'git-polyp worktree add {}' to create it.", branch, branch).deco_as_error());
-        std::process::exit(1);
+        return Err(AppError::Message(format!("Worktree directory '{}' does not exist. Run 'git-polyp worktree add {}' to create it.", branch, branch).deco_as_error()));
     }
 
     // Output the absolute path for use with cd
     println!("{}", worktree_path.display());
+    Ok(())
 }
 
-fn run_prune(verbose: bool) {
+fn run_prune(verbose: bool) -> Result<(), AppError> {
     // Find worktree root
-    let worktree_root = match detect::find_worktree_root() {
-        Ok(root) => root,
-        Err(_) => {
-            eprintln!(
-                "{}",
-                "Not in a git-polyp worktree workspace.".deco_as_error()
-            );
-            std::process::exit(1);
-        }
-    };
+    let worktree_root = detect::find_worktree_root()
+        .map_err(|_| AppError::Message("Not in a git-polyp worktree workspace.".deco_as_error()))?;
 
     // Load metadata
-    let mut metadata = match metadata::WorktreeMetadata::load(&worktree_root) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!(
-                "{}",
-                format!("Failed to load metadata: {:?}", e).deco_as_error()
-            );
-            std::process::exit(1);
-        }
-    };
+    let mut metadata = metadata::WorktreeMetadata::load(&worktree_root).map_err(|e| {
+        AppError::Message(format!("Failed to load metadata: {:?}", e).deco_as_error())
+    })?;
 
     // Change to bare repo for git operations
     let bare_path = detect::get_bare_repo_path(&worktree_root);
     let original_dir = std::env::current_dir().unwrap();
 
     if let Err(e) = std::env::set_current_dir(&bare_path) {
-        eprintln!(
-            "{}",
-            format!("Failed to change to bare repo directory: {}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to change to bare repo directory: {}", e).deco_as_error(),
+        ));
     }
 
     println!("Checking worktrees for cleanup candidates...\n");
@@ -1176,7 +1037,7 @@ fn run_prune(verbose: bool) {
 
     if candidates.is_empty() {
         println!("{}", "No worktrees to prune.".bright_green());
-        return;
+        return Ok(());
     }
 
     // Show candidates
@@ -1199,21 +1060,19 @@ fn run_prune(verbose: bool) {
         Ok(true) => {}
         Ok(false) => {
             println!("Aborted.");
-            return;
+            return Ok(());
         }
         Err(_) => {
             println!("Aborted.");
-            return;
+            return Ok(());
         }
     }
 
     // Change back to bare repo for removal
     if let Err(e) = std::env::set_current_dir(&bare_path) {
-        eprintln!(
-            "{}",
-            format!("Failed to change to bare repo directory: {}", e).deco_as_error()
-        );
-        std::process::exit(1);
+        return Err(AppError::Message(
+            format!("Failed to change to bare repo directory: {}", e).deco_as_error(),
+        ));
     }
 
     // Remove each candidate
@@ -1270,32 +1129,18 @@ fn run_prune(verbose: bool) {
         "\n{}",
         format!("Pruned {} worktree(s).", removed_count).bright_green()
     );
+    Ok(())
 }
 
-fn run_check(verbose: bool) {
+fn run_check(verbose: bool) -> Result<(), AppError> {
     // Find worktree root
-    let worktree_root = match detect::find_worktree_root() {
-        Ok(root) => root,
-        Err(_) => {
-            eprintln!(
-                "{}",
-                "Not in a git-polyp worktree workspace.".deco_as_error()
-            );
-            std::process::exit(1);
-        }
-    };
+    let worktree_root = detect::find_worktree_root()
+        .map_err(|_| AppError::Message("Not in a git-polyp worktree workspace.".deco_as_error()))?;
 
     // Load metadata
-    let metadata = match metadata::WorktreeMetadata::load(&worktree_root) {
-        Ok(m) => m,
-        Err(e) => {
-            eprintln!(
-                "{}",
-                format!("Failed to load metadata: {:?}", e).deco_as_error()
-            );
-            std::process::exit(1);
-        }
-    };
+    let metadata = metadata::WorktreeMetadata::load(&worktree_root).map_err(|e| {
+        AppError::Message(format!("Failed to load metadata: {:?}", e).deco_as_error())
+    })?;
 
     println!(
         "Checking worktrees in {}:\n",
@@ -1423,10 +1268,11 @@ fn run_check(verbose: bool) {
 
     if has_issues {
         println!("\n{}", "Some issues were found.".bright_yellow());
-        std::process::exit(1);
+        return Err(AppError::SilentFailure);
     } else {
         println!("\n{}", "All worktrees are healthy.".bright_green());
     }
+    Ok(())
 }
 
 #[cfg(test)]
