@@ -20,7 +20,7 @@ impl GitCommand {
     }
 
     fn execute(&self) -> Result<String, ClientError> {
-        print_command(&self.args, &self.verbose);
+        print_command(&self.args, self.verbose);
         let output = match std::process::Command::new("git").args(&self.args).output() {
             Ok(output) => output,
             Err(_) => {
@@ -41,7 +41,7 @@ impl GitCommand {
     }
 }
 
-pub fn merge_base(upstream: &str, branch: &str, verbose: &bool) -> Result<String, ClientError> {
+pub fn merge_base(upstream: &str, branch: &str, verbose: bool) -> Result<String, ClientError> {
     GitCommand::new(
         vec![
             "merge-base".to_string(),
@@ -53,7 +53,7 @@ pub fn merge_base(upstream: &str, branch: &str, verbose: &bool) -> Result<String
     .execute()
 }
 
-pub fn dot_git_dir(verbose: &bool) -> Result<String, ClientError> {
+pub fn dot_git_dir(verbose: bool) -> Result<String, ClientError> {
     GitCommand::new(
         vec!["rev-parse".to_string(), "--git-dir".to_string()],
         verbose,
@@ -61,7 +61,7 @@ pub fn dot_git_dir(verbose: &bool) -> Result<String, ClientError> {
     .execute()
 }
 
-pub fn polyp_dir(verbose: &bool) -> Result<String, ClientError> {
+pub fn polyp_dir(verbose: bool) -> Result<String, ClientError> {
     let git_dir = dot_git_dir(verbose)?;
     let polyp_dir = format!("{}/polyp", git_dir);
     if !std::path::Path::new(&polyp_dir).exists() {
@@ -70,7 +70,7 @@ pub fn polyp_dir(verbose: &bool) -> Result<String, ClientError> {
     Ok(polyp_dir)
 }
 
-pub fn current_branch(verbose: &bool) -> Result<String, ClientError> {
+pub fn current_branch(verbose: bool) -> Result<String, ClientError> {
     GitCommand::new(
         vec![
             "rev-parse".to_string(),
@@ -82,11 +82,11 @@ pub fn current_branch(verbose: &bool) -> Result<String, ClientError> {
     .execute()
 }
 
-pub fn rev_parse(rev: &str, verbose: &bool) -> Result<String, ClientError> {
+pub fn rev_parse(rev: &str, verbose: bool) -> Result<String, ClientError> {
     GitCommand::new(vec!["rev-parse".to_string(), rev.to_string()], verbose).execute()
 }
 
-pub fn is_in_repo(verbose: &bool) -> Result<bool, ClientError> {
+pub fn is_in_repo(verbose: bool) -> Result<bool, ClientError> {
     let args = vec!["rev-parse".to_string()];
     print_command(&args, verbose);
     let output = match std::process::Command::new("git").args(&args).output() {
@@ -102,7 +102,7 @@ pub fn is_in_repo(verbose: &bool) -> Result<bool, ClientError> {
     return Ok(true);
 }
 
-pub fn rev_list(upstream: &str, branch: &str, verbose: &bool) -> Result<Vec<String>, ClientError> {
+pub fn rev_list(upstream: &str, branch: &str, verbose: bool) -> Result<Vec<String>, ClientError> {
     let output = GitCommand::new(
         vec![
             "rev-list".to_string(),
@@ -116,7 +116,7 @@ pub fn rev_list(upstream: &str, branch: &str, verbose: &bool) -> Result<Vec<Stri
     Ok(output.lines().map(|line| line.to_string()).collect())
 }
 
-pub fn commit_message(commit_hash: &str, verbose: &bool) -> Result<String, ClientError> {
+pub fn commit_message(commit_hash: &str, verbose: bool) -> Result<String, ClientError> {
     GitCommand::new(
         vec![
             "log".to_string(),
@@ -129,7 +129,7 @@ pub fn commit_message(commit_hash: &str, verbose: &bool) -> Result<String, Clien
     .execute()
 }
 
-pub fn branches_at(commit_hash: &str, verbose: &bool) -> Result<Vec<String>, ClientError> {
+pub fn branches_at(commit_hash: &str, verbose: bool) -> Result<Vec<String>, ClientError> {
     let output = GitCommand::new(
         vec![
             "branch".to_string(),
@@ -144,7 +144,7 @@ pub fn branches_at(commit_hash: &str, verbose: &bool) -> Result<Vec<String>, Cli
     Ok(output.lines().map(|line| line.trim().to_string()).collect())
 }
 
-pub fn switch_d(revision: &str, verbose: &bool) -> Result<(), ClientError> {
+pub fn switch_d(revision: &str, verbose: bool) -> Result<(), ClientError> {
     GitCommand::new(
         vec![
             "switch".to_string(),
@@ -157,13 +157,13 @@ pub fn switch_d(revision: &str, verbose: &bool) -> Result<(), ClientError> {
     .map(|_| ())
 }
 
-pub fn switch(branch: &str, verbose: &bool) -> Result<(), ClientError> {
+pub fn switch(branch: &str, verbose: bool) -> Result<(), ClientError> {
     GitCommand::new(vec!["switch".to_string(), branch.to_string()], verbose)
         .execute()
         .map(|_| ())
 }
 
-pub fn cherry_pick(commit_a: &str, commit_b: &str, verbose: &bool) -> Result<(), ClientError> {
+pub fn cherry_pick(commit_a: &str, commit_b: &str, verbose: bool) -> Result<(), ClientError> {
     let args = vec![
         "cherry-pick".to_string(),
         format!("{}^..{}", commit_a, commit_b),
@@ -171,7 +171,7 @@ pub fn cherry_pick(commit_a: &str, commit_b: &str, verbose: &bool) -> Result<(),
     GitCommand::new(args, verbose).execute().map(|_| ())
 }
 
-pub fn cherry_pick_continue(verbose: &bool) -> Result<(), ClientError> {
+pub fn cherry_pick_continue(verbose: bool) -> Result<(), ClientError> {
     GitCommand::new(
         vec!["cherry-pick".to_string(), "--continue".to_string()],
         verbose,
@@ -180,7 +180,7 @@ pub fn cherry_pick_continue(verbose: &bool) -> Result<(), ClientError> {
     .map(|_| ())
 }
 
-pub fn move_branche_at(commit_hash: &str, branch: &str, verbose: &bool) -> Result<(), ClientError> {
+pub fn move_branche_at(commit_hash: &str, branch: &str, verbose: bool) -> Result<(), ClientError> {
     GitCommand::new(
         vec![
             "branch".to_string(),
@@ -197,7 +197,7 @@ pub fn move_branche_at(commit_hash: &str, branch: &str, verbose: &bool) -> Resul
 pub fn push_branches(
     remote: &str,
     branches: Vec<String>,
-    verbose: &bool,
+    verbose: bool,
 ) -> Result<(), ClientError> {
     let mut args = vec![
         "push".to_string(),
@@ -211,7 +211,7 @@ pub fn push_branches(
     GitCommand::new(args, verbose).execute().map(|_| ())
 }
 
-fn print_command(args: &Vec<String>, verbose: &bool) {
+fn print_command(args: &Vec<String>, verbose: bool) {
     io::execute(verbose, &format!("git {}", args.join(" ")));
 }
 
@@ -221,7 +221,7 @@ fn print_command(args: &Vec<String>, verbose: &bool) {
 
 /// Detach HEAD in the current repo by pointing it to a raw SHA.
 /// This frees up the current branch so it can be used by a worktree.
-pub fn detach_head(verbose: &bool) -> Result<(), ClientError> {
+pub fn detach_head(verbose: bool) -> Result<(), ClientError> {
     let head_sha =
         GitCommand::new(vec!["rev-parse".to_string(), "HEAD".to_string()], verbose).execute()?;
 
@@ -239,7 +239,7 @@ pub fn detach_head(verbose: &bool) -> Result<(), ClientError> {
 }
 
 /// Clone a repository as a bare repo
-pub fn clone_bare(url: &str, dest: &str, verbose: &bool) -> Result<(), ClientError> {
+pub fn clone_bare(url: &str, dest: &str, verbose: bool) -> Result<(), ClientError> {
     GitCommand::new(
         vec![
             "clone".to_string(),
@@ -254,7 +254,7 @@ pub fn clone_bare(url: &str, dest: &str, verbose: &bool) -> Result<(), ClientErr
 }
 
 /// Add a new worktree
-pub fn worktree_add(path: &str, branch: &str, verbose: &bool) -> Result<(), ClientError> {
+pub fn worktree_add(path: &str, branch: &str, verbose: bool) -> Result<(), ClientError> {
     GitCommand::new(
         vec![
             "worktree".to_string(),
@@ -273,7 +273,7 @@ pub fn worktree_add_new_branch(
     path: &str,
     branch: &str,
     base: &str,
-    verbose: &bool,
+    verbose: bool,
 ) -> Result<(), ClientError> {
     GitCommand::new(
         vec![
@@ -291,7 +291,7 @@ pub fn worktree_add_new_branch(
 }
 
 /// Remove a worktree
-pub fn worktree_remove(path: &str, force: bool, verbose: &bool) -> Result<(), ClientError> {
+pub fn worktree_remove(path: &str, force: bool, verbose: bool) -> Result<(), ClientError> {
     let mut args = vec!["worktree".to_string(), "remove".to_string()];
     if force {
         args.push("--force".to_string());
@@ -305,7 +305,7 @@ pub fn worktree_remove(path: &str, force: bool, verbose: &bool) -> Result<(), Cl
 ///
 /// Use `remote_branch_exists` to check the remote, and `fetch_branch`
 /// to create a local ref from a remote-only branch.
-pub fn branch_exists(branch: &str, verbose: &bool) -> Result<bool, ClientError> {
+pub fn branch_exists(branch: &str, verbose: bool) -> Result<bool, ClientError> {
     let result = GitCommand::new(
         vec![
             "show-ref".to_string(),
@@ -321,7 +321,7 @@ pub fn branch_exists(branch: &str, verbose: &bool) -> Result<bool, ClientError> 
 }
 
 /// Delete a branch
-pub fn delete_branch(name: &str, force: bool, verbose: &bool) -> Result<(), ClientError> {
+pub fn delete_branch(name: &str, force: bool, verbose: bool) -> Result<(), ClientError> {
     let flag = if force { "-D" } else { "-d" };
     GitCommand::new(
         vec!["branch".to_string(), flag.to_string(), name.to_string()],
@@ -332,24 +332,23 @@ pub fn delete_branch(name: &str, force: bool, verbose: &bool) -> Result<(), Clie
 }
 
 /// Check if a branch is merged into another branch
-pub fn is_branch_merged(branch: &str, into: &str, verbose: &bool) -> Result<bool, ClientError> {
+pub fn is_branch_merged(branch: &str, into: &str, verbose: bool) -> Result<bool, ClientError> {
     let output = GitCommand::new(
         vec![
             "branch".to_string(),
             "--merged".to_string(),
+            "--format=%(refname:short)".to_string(),
             into.to_string(),
         ],
         verbose,
     )
     .execute()?;
 
-    Ok(output
-        .lines()
-        .any(|line| line.trim().trim_start_matches("* ") == branch))
+    Ok(output.lines().any(|line| line.trim() == branch))
 }
 
 /// Detect the main branch name (main, master, or default)
-pub fn detect_main_branch(verbose: &bool) -> Result<String, ClientError> {
+pub fn detect_main_branch(verbose: bool) -> Result<String, ClientError> {
     // Try common main branch names in order of preference
     for branch in &["main", "master"] {
         if branch_exists(branch, verbose)? {
@@ -388,7 +387,7 @@ pub fn detect_main_branch(verbose: &bool) -> Result<String, ClientError> {
 }
 
 /// Check if a worktree has uncommitted changes
-pub fn worktree_is_dirty(path: &str, verbose: &bool) -> Result<bool, ClientError> {
+pub fn worktree_is_dirty(path: &str, verbose: bool) -> Result<bool, ClientError> {
     let output = GitCommand::new(
         vec![
             "-C".to_string(),
@@ -404,7 +403,7 @@ pub fn worktree_is_dirty(path: &str, verbose: &bool) -> Result<bool, ClientError
 }
 
 /// Get ahead/behind count for a branch relative to its upstream
-pub fn get_ahead_behind(branch: &str, verbose: &bool) -> Result<(u32, u32), ClientError> {
+pub fn get_ahead_behind(branch: &str, verbose: bool) -> Result<(u32, u32), ClientError> {
     let output = GitCommand::new(
         vec![
             "rev-list".to_string(),
@@ -432,7 +431,7 @@ pub fn get_ahead_behind(branch: &str, verbose: &bool) -> Result<(u32, u32), Clie
 }
 
 /// Get the current branch of a worktree at a specific path
-pub fn worktree_current_branch(path: &str, verbose: &bool) -> Result<Option<String>, ClientError> {
+pub fn worktree_current_branch(path: &str, verbose: bool) -> Result<Option<String>, ClientError> {
     print_command(
         &vec![
             "-C".to_string(),
@@ -467,7 +466,7 @@ pub fn worktree_current_branch(path: &str, verbose: &bool) -> Result<Option<Stri
 }
 
 /// Check if a worktree has a merge/rebase/cherry-pick in progress
-pub fn worktree_has_conflicts(path: &str, verbose: &bool) -> Result<bool, ClientError> {
+pub fn worktree_has_conflicts(path: &str, verbose: bool) -> Result<bool, ClientError> {
     // Check for various conflict states by looking for marker files
     print_command(
         &vec![
@@ -512,7 +511,7 @@ pub fn worktree_has_conflicts(path: &str, verbose: &bool) -> Result<bool, Client
 }
 
 /// Check if a worktree directory is valid (not broken)
-pub fn worktree_is_valid(path: &str, verbose: &bool) -> Result<bool, ClientError> {
+pub fn worktree_is_valid(path: &str, verbose: bool) -> Result<bool, ClientError> {
     print_command(
         &vec![
             "-C".to_string(),
@@ -541,7 +540,7 @@ pub fn worktree_is_valid(path: &str, verbose: &bool) -> Result<bool, ClientError
 }
 
 /// Check if a branch exists on the remote
-pub fn remote_branch_exists(branch: &str, verbose: &bool) -> Result<bool, ClientError> {
+pub fn remote_branch_exists(branch: &str, verbose: bool) -> Result<bool, ClientError> {
     let output = GitCommand::new(
         vec![
             "ls-remote".to_string(),
@@ -557,7 +556,7 @@ pub fn remote_branch_exists(branch: &str, verbose: &bool) -> Result<bool, Client
 }
 
 /// Fetch a specific branch from origin, creating a local ref for it
-pub fn fetch_branch(branch: &str, verbose: &bool) -> Result<(), ClientError> {
+pub fn fetch_branch(branch: &str, verbose: bool) -> Result<(), ClientError> {
     GitCommand::new(
         vec![
             "fetch".to_string(),
@@ -684,7 +683,7 @@ mod tests {
         let original_dir = std::env::current_dir().unwrap();
         std::env::set_current_dir(&bare_dir).unwrap();
 
-        let result = branch_exists("main", &false).unwrap();
+        let result = branch_exists("main", false).unwrap();
         assert!(result, "main branch should exist locally in bare clone");
 
         std::env::set_current_dir(&original_dir).unwrap();
@@ -699,7 +698,7 @@ mod tests {
         let original_dir = std::env::current_dir().unwrap();
         std::env::set_current_dir(&bare_dir).unwrap();
 
-        let result = branch_exists("does-not-exist", &false).unwrap();
+        let result = branch_exists("does-not-exist", false).unwrap();
         assert!(!result, "non-existent branch should not be found");
 
         std::env::set_current_dir(&original_dir).unwrap();
@@ -723,11 +722,11 @@ mod tests {
         std::env::set_current_dir(&bare_dir).unwrap();
 
         // branch_exists should NOT find it (no local ref yet)
-        let local = branch_exists("feature-remote", &false).unwrap();
+        let local = branch_exists("feature-remote", false).unwrap();
         assert!(!local, "branch should not exist locally before fetch");
 
         // remote_branch_exists SHOULD find it (queries the remote via ls-remote)
-        let remote = remote_branch_exists("feature-remote", &false).unwrap();
+        let remote = remote_branch_exists("feature-remote", false).unwrap();
         assert!(remote, "branch should be found on the remote");
 
         std::env::set_current_dir(&original_dir).unwrap();
@@ -742,7 +741,7 @@ mod tests {
         let original_dir = std::env::current_dir().unwrap();
         std::env::set_current_dir(&bare_dir).unwrap();
 
-        let result = remote_branch_exists("no-such-branch", &false).unwrap();
+        let result = remote_branch_exists("no-such-branch", false).unwrap();
         assert!(!result, "non-existent branch should not be found on remote");
 
         std::env::set_current_dir(&original_dir).unwrap();
@@ -766,14 +765,14 @@ mod tests {
         std::env::set_current_dir(&bare_dir).unwrap();
 
         // Not available locally yet
-        assert!(!branch_exists("feature-fetch", &false).unwrap());
+        assert!(!branch_exists("feature-fetch", false).unwrap());
 
         // Fetch the branch
-        fetch_branch("feature-fetch", &false).unwrap();
+        fetch_branch("feature-fetch", false).unwrap();
 
         // Now it should be available locally
         assert!(
-            branch_exists("feature-fetch", &false).unwrap(),
+            branch_exists("feature-fetch", false).unwrap(),
             "branch should exist locally after fetch"
         );
 
@@ -789,7 +788,7 @@ mod tests {
         let original_dir = std::env::current_dir().unwrap();
         std::env::set_current_dir(&bare_dir).unwrap();
 
-        let result = fetch_branch("no-such-branch", &false);
+        let result = fetch_branch("no-such-branch", false);
         assert!(result.is_err(), "fetching non-existent branch should fail");
 
         std::env::set_current_dir(&original_dir).unwrap();
@@ -814,15 +813,15 @@ mod tests {
 
         // Simulate the fixed run_add flow:
         // 1. branch_exists → false
-        assert!(!branch_exists("feature-worktree", &false).unwrap());
+        assert!(!branch_exists("feature-worktree", false).unwrap());
         // 2. remote_branch_exists → true
-        assert!(remote_branch_exists("feature-worktree", &false).unwrap());
+        assert!(remote_branch_exists("feature-worktree", false).unwrap());
         // 3. fetch_branch
-        fetch_branch("feature-worktree", &false).unwrap();
+        fetch_branch("feature-worktree", false).unwrap();
         // 4. worktree_add succeeds
         let wt_path = create_temp_dir("wt-output");
         let _ = std::fs::remove_dir_all(&wt_path); // worktree_add creates it
-        let result = worktree_add(wt_path.to_str().unwrap(), "feature-worktree", &false);
+        let result = worktree_add(wt_path.to_str().unwrap(), "feature-worktree", false);
         assert!(
             result.is_ok(),
             "worktree_add should succeed after fetch: {:?}",
@@ -860,7 +859,7 @@ mod tests {
         // Without fetching, worktree_add should fail
         let wt_path = create_temp_dir("wt-nofetch");
         let _ = std::fs::remove_dir_all(&wt_path);
-        let result = worktree_add(wt_path.to_str().unwrap(), "feature-nofetch", &false);
+        let result = worktree_add(wt_path.to_str().unwrap(), "feature-nofetch", false);
         assert!(
             result.is_err(),
             "worktree_add should fail without fetch for remote-only branch"

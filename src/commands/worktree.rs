@@ -145,7 +145,7 @@ fn run_init(url: &str, path: Option<&str>, verbose: bool) {
         bare_path.display().to_string().bright_green()
     );
 
-    if let Err(e) = client::clone_bare(url, bare_path.to_str().unwrap(), &verbose) {
+    if let Err(e) = client::clone_bare(url, bare_path.to_str().unwrap(), verbose) {
         // Clean up on failure
         let _ = std::fs::remove_dir_all(dest_path);
         eprintln!(
@@ -178,7 +178,7 @@ fn run_init(url: &str, path: Option<&str>, verbose: bool) {
     }
 
     // Detect main branch
-    let main_branch = match client::detect_main_branch(&verbose) {
+    let main_branch = match client::detect_main_branch(verbose) {
         Ok(branch) => branch,
         Err(_) => {
             // Fallback to "main"
@@ -187,7 +187,7 @@ fn run_init(url: &str, path: Option<&str>, verbose: bool) {
     };
 
     // Detach HEAD so the main branch is free to be used by a worktree
-    if let Err(e) = client::detach_head(&verbose) {
+    if let Err(e) = client::detach_head(verbose) {
         let _ = std::env::set_current_dir(&original_dir);
         let _ = std::fs::remove_dir_all(dest_path);
         eprintln!(
@@ -232,7 +232,7 @@ fn run_init(url: &str, path: Option<&str>, verbose: bool) {
         main_branch.bright_cyan()
     );
 
-    if let Err(e) = client::worktree_add(main_worktree_path_str, &main_branch, &verbose) {
+    if let Err(e) = client::worktree_add(main_worktree_path_str, &main_branch, verbose) {
         let _ = std::env::set_current_dir(&original_dir);
         let _ = std::fs::remove_dir_all(dest_path);
         eprintln!(
@@ -310,7 +310,7 @@ fn run_convert(verbose: bool) {
     }
 
     // Get current branch
-    let current_branch = match client::current_branch(&verbose) {
+    let current_branch = match client::current_branch(verbose) {
         Ok(branch) => branch,
         Err(_) => {
             eprintln!("{}", "Failed to determine current branch.".deco_as_error());
@@ -319,7 +319,7 @@ fn run_convert(verbose: bool) {
     };
 
     // Detect main branch (might be different from current branch)
-    let main_branch = match client::detect_main_branch(&verbose) {
+    let main_branch = match client::detect_main_branch(verbose) {
         Ok(branch) => branch,
         Err(_) => current_branch.clone(),
     };
@@ -582,7 +582,7 @@ fn run_add(branch: &str, base: Option<&str>, verbose: bool) {
         .unwrap_or_else(|| metadata.main_branch.clone());
 
     // Check if branch exists locally
-    let local_exists = match client::branch_exists(branch, &verbose) {
+    let local_exists = match client::branch_exists(branch, verbose) {
         Ok(exists) => exists,
         Err(e) => {
             let _ = std::env::set_current_dir(&original_dir);
@@ -596,7 +596,7 @@ fn run_add(branch: &str, base: Option<&str>, verbose: bool) {
 
     // If not found locally, check if it exists on the remote
     let remote_exists = if !local_exists {
-        match client::remote_branch_exists(branch, &verbose) {
+        match client::remote_branch_exists(branch, verbose) {
             Ok(exists) => exists,
             Err(_) => false,
         }
@@ -607,7 +607,7 @@ fn run_add(branch: &str, base: Option<&str>, verbose: bool) {
     // If the branch exists on the remote but not locally, fetch it
     if remote_exists {
         println!("Fetching branch '{}' from remote...", branch.bright_cyan());
-        if let Err(e) = client::fetch_branch(branch, &verbose) {
+        if let Err(e) = client::fetch_branch(branch, verbose) {
             let _ = std::env::set_current_dir(&original_dir);
             eprintln!(
                 "{}",
@@ -627,7 +627,7 @@ fn run_add(branch: &str, base: Option<&str>, verbose: bool) {
             "Creating worktree for existing branch '{}'...",
             branch.bright_cyan()
         );
-        if let Err(e) = client::worktree_add(worktree_path_str, branch, &verbose) {
+        if let Err(e) = client::worktree_add(worktree_path_str, branch, verbose) {
             let _ = std::env::set_current_dir(&original_dir);
             eprintln!(
                 "{}",
@@ -647,7 +647,7 @@ fn run_add(branch: &str, base: Option<&str>, verbose: bool) {
             base_ref.bright_cyan()
         );
         if let Err(e) =
-            client::worktree_add_new_branch(worktree_path_str, branch, &base_ref, &verbose)
+            client::worktree_add_new_branch(worktree_path_str, branch, &base_ref, verbose)
         {
             let _ = std::env::set_current_dir(&original_dir);
             eprintln!(
@@ -729,7 +729,7 @@ fn run_clean(branch: &str, force: bool, delete_branch: bool, keep_branch: bool, 
 
     // Check for uncommitted changes
     if worktree_path.exists() {
-        match client::worktree_is_dirty(worktree_path_str, &verbose) {
+        match client::worktree_is_dirty(worktree_path_str, verbose) {
             Ok(true) => {
                 if !force {
                     eprintln!(
@@ -772,7 +772,7 @@ fn run_clean(branch: &str, force: bool, delete_branch: bool, keep_branch: bool, 
 
     // Remove worktree
     println!("Removing worktree '{}'...", branch.bright_cyan());
-    if let Err(e) = client::worktree_remove(worktree_path_str, force, &verbose) {
+    if let Err(e) = client::worktree_remove(worktree_path_str, force, verbose) {
         let _ = std::env::set_current_dir(&original_dir);
         eprintln!(
             "{}",
@@ -820,7 +820,7 @@ fn run_clean(branch: &str, force: bool, delete_branch: bool, keep_branch: bool, 
             std::process::exit(1);
         }
 
-        if let Err(e) = client::delete_branch(branch, force, &verbose) {
+        if let Err(e) = client::delete_branch(branch, force, verbose) {
             let _ = std::env::set_current_dir(&original_dir);
             eprintln!(
                 "{}",
@@ -899,7 +899,7 @@ fn run_list(verbose: bool) {
         let status = if !exists {
             "[missing]".bright_red().to_string()
         } else {
-            match client::worktree_is_dirty(worktree_path_str, &verbose) {
+            match client::worktree_is_dirty(worktree_path_str, verbose) {
                 Ok(true) => "[dirty]".bright_yellow().to_string(),
                 Ok(false) => "[clean]".bright_green().to_string(),
                 Err(_) => "[?]".bright_red().to_string(),
@@ -908,7 +908,7 @@ fn run_list(verbose: bool) {
 
         // Get ahead/behind info
         let ahead_behind = if exists {
-            match client::get_ahead_behind(&entry.branch, &verbose) {
+            match client::get_ahead_behind(&entry.branch, verbose) {
                 Ok((ahead, behind)) => {
                     let mut parts = Vec::new();
                     if ahead > 0 {
@@ -987,14 +987,14 @@ fn run_switch(branch: &str, verbose: bool) {
         }
 
         // Check if branch exists locally
-        let local_exists = match client::branch_exists(branch, &verbose) {
+        let local_exists = match client::branch_exists(branch, verbose) {
             Ok(exists) => exists,
             Err(_) => false,
         };
 
         // Check if branch exists on the remote
         let remote_exists = if !local_exists {
-            match client::remote_branch_exists(branch, &verbose) {
+            match client::remote_branch_exists(branch, verbose) {
                 Ok(exists) => exists,
                 Err(_) => false,
             }
@@ -1014,7 +1014,7 @@ fn run_switch(branch: &str, verbose: bool) {
         // Fetch from remote if needed
         if remote_exists {
             eprintln!("Fetching branch '{}' from remote...", branch.bright_cyan());
-            if let Err(e) = client::fetch_branch(branch, &verbose) {
+            if let Err(e) = client::fetch_branch(branch, verbose) {
                 let _ = std::env::set_current_dir(&original_dir);
                 eprintln!(
                     "{}",
@@ -1029,7 +1029,7 @@ fn run_switch(branch: &str, verbose: bool) {
         let worktree_path_str = worktree_path.to_str().unwrap();
 
         eprintln!("Creating worktree for branch '{}'...", branch.bright_cyan());
-        if let Err(e) = client::worktree_add(worktree_path_str, branch, &verbose) {
+        if let Err(e) = client::worktree_add(worktree_path_str, branch, verbose) {
             let _ = std::env::set_current_dir(&original_dir);
             eprintln!(
                 "{}",
@@ -1135,7 +1135,7 @@ fn run_prune(verbose: bool) {
         }
 
         // Check if worktree has uncommitted changes (skip if dirty)
-        match client::worktree_is_dirty(worktree_path_str, &verbose) {
+        match client::worktree_is_dirty(worktree_path_str, verbose) {
             Ok(true) => {
                 // Skip dirty worktrees
                 continue;
@@ -1145,7 +1145,7 @@ fn run_prune(verbose: bool) {
         }
 
         // Check if branch is merged into main
-        match client::is_branch_merged(&entry.branch, &metadata.main_branch, &verbose) {
+        match client::is_branch_merged(&entry.branch, &metadata.main_branch, verbose) {
             Ok(true) => {
                 candidates.push(PruneCandidate {
                     name: name.clone(),
@@ -1158,7 +1158,7 @@ fn run_prune(verbose: bool) {
         }
 
         // Check if branch exists on remote
-        match client::remote_branch_exists(&entry.branch, &verbose) {
+        match client::remote_branch_exists(&entry.branch, verbose) {
             Ok(false) => {
                 // Branch doesn't exist on remote, might be deleted
                 // But only if it's not a local-only branch
@@ -1226,7 +1226,7 @@ fn run_prune(verbose: bool) {
 
         // Try to remove the worktree
         if worktree_path.exists() {
-            if let Err(e) = client::worktree_remove(worktree_path_str, true, &verbose) {
+            if let Err(e) = client::worktree_remove(worktree_path_str, true, verbose) {
                 eprintln!(
                     "{}",
                     format!("  Failed to remove worktree: {:?}", e).bright_yellow()
@@ -1242,7 +1242,7 @@ fn run_prune(verbose: bool) {
         // Ask about branch deletion
         match YNQuestion::new(format!("Also delete branch '{}'?", candidate.name)).ask() {
             Ok(true) => {
-                if let Err(e) = client::delete_branch(&candidate.name, true, &verbose) {
+                if let Err(e) = client::delete_branch(&candidate.name, true, verbose) {
                     eprintln!(
                         "{}",
                         format!("  Warning: Failed to delete branch: {:?}", e).bright_yellow()
@@ -1335,7 +1335,7 @@ fn run_check(verbose: bool) {
         }
 
         // Check if worktree is valid
-        match client::worktree_is_valid(worktree_path_str, &verbose) {
+        match client::worktree_is_valid(worktree_path_str, verbose) {
             Ok(false) => {
                 println!(
                     "  {} {} worktree is broken",
@@ -1358,7 +1358,7 @@ fn run_check(verbose: bool) {
         }
 
         // Check for conflicts in progress
-        match client::worktree_has_conflicts(worktree_path_str, &verbose) {
+        match client::worktree_has_conflicts(worktree_path_str, verbose) {
             Ok(true) => {
                 println!(
                     "  {} {} merge/rebase/cherry-pick in progress",
@@ -1381,7 +1381,7 @@ fn run_check(verbose: bool) {
         }
 
         // Check current branch
-        match client::worktree_current_branch(worktree_path_str, &verbose) {
+        match client::worktree_current_branch(worktree_path_str, verbose) {
             Ok(None) => {
                 println!(
                     "  {} {} detached HEAD (expected branch {})",

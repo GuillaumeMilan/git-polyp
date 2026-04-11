@@ -60,7 +60,7 @@ impl Stack {
         base_ref: &str,
         top_ref: &str,
         destination_ref: &str,
-        verbose: &bool,
+        verbose: bool,
     ) -> Result<Self, client::ClientError> {
         let entries = build_stack(base_ref, top_ref, verbose)?;
         Ok(Stack {
@@ -82,7 +82,7 @@ impl Stack {
         format!("{}\n\n{}", title.bold().underline(), self.format())
     }
 
-    pub fn exists(verbose: &bool) -> Result<bool, StackError> {
+    pub fn exists(verbose: bool) -> Result<bool, StackError> {
         io::explain(
             verbose,
             "Finding the git-polyp directory to check if a rebase stack file exists.",
@@ -105,7 +105,7 @@ impl Stack {
         Ok(stack_exists)
     }
 
-    pub fn persist(&self, verbose: &bool) -> Result<(), StackError> {
+    pub fn persist(&self, verbose: bool) -> Result<(), StackError> {
         let stack_data =
             serde_json::to_string(&self).map_err(|_| StackError::SerializationError)?;
         io::explain(
@@ -126,7 +126,7 @@ impl Stack {
         return Ok(());
     }
 
-    pub fn load(verbose: &bool) -> Result<Self, StackError> {
+    pub fn load(verbose: bool) -> Result<Self, StackError> {
         io::explain(
             verbose,
             "Finding the git-polyp directory to load the rebase stack.",
@@ -147,7 +147,7 @@ impl Stack {
         Ok(stack)
     }
 
-    pub fn clean(verbose: &bool) -> Result<(), StackError> {
+    pub fn clean(verbose: bool) -> Result<(), StackError> {
         io::explain(
             verbose,
             "Finding the git-polyp directory to clean any existing rebase stack.",
@@ -174,7 +174,7 @@ impl Stack {
         }
     }
 
-    pub fn apply(&self, verbose: &bool) -> Result<(), StackError> {
+    pub fn apply(&self, verbose: bool) -> Result<(), StackError> {
         io::explain(
             verbose,
             "Applying the rebase stack by moving the branches to their corresponding commits in the provided stack.",
@@ -189,7 +189,7 @@ impl Stack {
         Ok(())
     }
 
-    pub fn apply_branches_from(&self, other: &Stack, verbose: &bool) -> Result<Stack, StackError> {
+    pub fn apply_branches_from(&self, other: &Stack, verbose: bool) -> Result<Stack, StackError> {
         io::explain(
             verbose,
             "Applying the branches from the provided stack to the current stack by matching the commit messages of their entries.",
@@ -242,7 +242,7 @@ impl Stack {
 fn build_stack(
     upstream: &str,
     branch: &str,
-    verbose: &bool,
+    verbose: bool,
 ) -> Result<Vec<StackEntry>, client::ClientError> {
     let explain_message = format!(
         "Building the stack of commits to rebase from `{}` to `{}`",
