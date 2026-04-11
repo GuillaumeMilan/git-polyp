@@ -222,15 +222,6 @@ fn print_command(args: &Vec<String>, verbose: &bool) {
 // Worktree-related functions
 // ============================================================================
 
-/// Information about a single git worktree
-#[derive(Debug, Clone)]
-pub struct WorktreeInfo {
-    pub path: String,
-    pub head: String,
-    pub branch: Option<String>,
-    pub is_bare: bool,
-}
-
 /// Clone a repository as a bare repo
 pub fn clone_bare(url: &str, dest: &str, verbose: &bool) -> Result<(), ClientError> {
     GitCommand::new(
@@ -244,66 +235,6 @@ pub fn clone_bare(url: &str, dest: &str, verbose: &bool) -> Result<(), ClientErr
     )
     .execute()
     .map(|_| ())
-}
-
-/// List all worktrees in the repository
-pub fn worktree_list(verbose: &bool) -> Result<Vec<WorktreeInfo>, ClientError> {
-    let output = GitCommand::new(
-        vec![
-            "worktree".to_string(),
-            "list".to_string(),
-            "--porcelain".to_string(),
-        ],
-        verbose,
-    )
-    .execute()?;
-
-    let mut worktrees = Vec::new();
-    let mut current_path: Option<String> = None;
-    let mut current_head: Option<String> = None;
-    let mut current_branch: Option<String> = None;
-    let mut is_bare = false;
-
-    for line in output.lines() {
-        if line.starts_with("worktree ") {
-            // Save previous worktree if exists
-            if let (Some(path), Some(head)) = (current_path.take(), current_head.take()) {
-                worktrees.push(WorktreeInfo {
-                    path,
-                    head,
-                    branch: current_branch.take(),
-                    is_bare,
-                });
-                is_bare = false;
-            }
-            current_path = Some(line.strip_prefix("worktree ").unwrap_or("").to_string());
-        } else if line.starts_with("HEAD ") {
-            current_head = Some(line.strip_prefix("HEAD ").unwrap_or("").to_string());
-        } else if line.starts_with("branch ") {
-            let branch_ref = line.strip_prefix("branch ").unwrap_or("");
-            // Convert refs/heads/branch to just branch
-            current_branch = Some(
-                branch_ref
-                    .strip_prefix("refs/heads/")
-                    .unwrap_or(branch_ref)
-                    .to_string(),
-            );
-        } else if line == "bare" {
-            is_bare = true;
-        }
-    }
-
-    // Don't forget the last worktree
-    if let (Some(path), Some(head)) = (current_path, current_head) {
-        worktrees.push(WorktreeInfo {
-            path,
-            head,
-            branch: current_branch,
-            is_bare,
-        });
-    }
-
-    Ok(worktrees)
 }
 
 /// Add a new worktree
@@ -385,20 +316,6 @@ pub fn branch_exists(branch: &str, verbose: &bool) -> Result<bool, ClientError> 
     .execute();
 
     Ok(remote_check.is_ok())
-}
-
-/// Create a new branch from a base ref
-pub fn create_branch(name: &str, from: &str, verbose: &bool) -> Result<(), ClientError> {
-    GitCommand::new(
-        vec![
-            "branch".to_string(),
-            name.to_string(),
-            from.to_string(),
-        ],
-        verbose,
-    )
-    .execute()
-    .map(|_| ())
 }
 
 /// Delete a branch
@@ -511,14 +428,386 @@ pub fn get_ahead_behind(branch: &str, verbose: &bool) -> Result<(u32, u32), Clie
     }
 }
 
-/// Get the repository root directory
-pub fn repo_root(verbose: &bool) -> Result<String, ClientError> {
+/// Get the current branch of a worktree at a specific path
+pub fn worktree_current_branch(path: &str, verbose: &bool) -> Result<Option<String>, ClientError> {
+    let output = std::process::Command::new("git")
+        .args(&["-C", path, "rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .map_err(|_| ClientError::Command)?;
+
+    print_command(&vec!["-C".to_string(), path.to_string(), "rev-parse".to_string(), "--abbrev-ref".to_string(), "HEAD".to_string()], verbose);
+
+    if !output.status.success() {
+        return Err(ClientError::NonZeroExitCode);
+    }
+
+    let branch = String::from_utf8(output.stdout)
+        .map_err(|_| ClientError::InvalidUtf8)?
+        .trim()
+        .to_string();
+
+    // HEAD means detached state
+    if branch == "HEAD" {
+        return Ok(None);
+    }
+
+    Ok(Some(branch))
+}
+
+/// Check if a worktree has a merge/rebase/cherry-pick in progress
+pub fn worktree_has_conflicts(path: &str, verbose: &bool) -> Result<bool, ClientError> {
+    // Check for various conflict states by looking for marker files
+    let git_dir_output = std::process::Command::new("git")
+        .args(&["-C", path, "rev-parse", "--git-dir"])
+        .output()
+        .map_err(|_| ClientError::Command)?;
+
+    print_command(&vec!["-C".to_string(), path.to_string(), "rev-parse".to_string(), "--git-dir".to_string()], verbose);
+
+    if !git_dir_output.status.success() {
+        return Err(ClientError::NonZeroExitCode);
+    }
+
+    let git_dir = String::from_utf8(git_dir_output.stdout)
+        .map_err(|_| ClientError::InvalidUtf8)?
+        .trim()
+        .to_string();
+
+    let git_dir_path = if std::path::Path::new(&git_dir).is_absolute() {
+        std::path::PathBuf::from(&git_dir)
+    } else {
+        std::path::PathBuf::from(path).join(&git_dir)
+    };
+
+    // Check for merge, rebase, or cherry-pick in progress
+    let merge_head = git_dir_path.join("MERGE_HEAD");
+    let rebase_merge = git_dir_path.join("rebase-merge");
+    let rebase_apply = git_dir_path.join("rebase-apply");
+    let cherry_pick_head = git_dir_path.join("CHERRY_PICK_HEAD");
+
+    Ok(merge_head.exists() || rebase_merge.exists() || rebase_apply.exists() || cherry_pick_head.exists())
+}
+
+/// Check if a worktree directory is valid (not broken)
+pub fn worktree_is_valid(path: &str, verbose: &bool) -> Result<bool, ClientError> {
+    let output = std::process::Command::new("git")
+        .args(&["-C", path, "rev-parse", "--is-inside-work-tree"])
+        .output()
+        .map_err(|_| ClientError::Command)?;
+
+    print_command(&vec!["-C".to_string(), path.to_string(), "rev-parse".to_string(), "--is-inside-work-tree".to_string()], verbose);
+
+    if !output.status.success() {
+        return Ok(false);
+    }
+
+    let result = String::from_utf8(output.stdout)
+        .map_err(|_| ClientError::InvalidUtf8)?
+        .trim()
+        .to_string();
+
+    Ok(result == "true")
+}
+
+/// Check if a branch exists on the remote
+pub fn remote_branch_exists(branch: &str, verbose: &bool) -> Result<bool, ClientError> {
+    let output = GitCommand::new(
+        vec![
+            "ls-remote".to_string(),
+            "--heads".to_string(),
+            "origin".to_string(),
+            branch.to_string(),
+        ],
+        verbose,
+    )
+    .execute()?;
+
+    Ok(!output.trim().is_empty())
+}
+
+/// Fetch a specific branch from origin, creating a local ref for it
+pub fn fetch_branch(branch: &str, verbose: &bool) -> Result<(), ClientError> {
     GitCommand::new(
         vec![
-            "rev-parse".to_string(),
-            "--show-toplevel".to_string(),
+            "fetch".to_string(),
+            "origin".to_string(),
+            format!("refs/heads/{}:refs/heads/{}", branch, branch),
         ],
         verbose,
     )
     .execute()
+    .map(|_| ())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+    use std::sync::{Mutex, atomic::{AtomicU32, Ordering}};
+
+    static TEST_COUNTER: AtomicU32 = AtomicU32::new(0);
+    /// Mutex to serialize tests that need to change the process working directory.
+    /// Mutex to serialize tests that change the process working directory.
+    /// We recover from poison (a prior test panicked while holding the lock).
+    static CWD_LOCK: Mutex<()> = Mutex::new(());
+    fn lock_cwd() -> std::sync::MutexGuard<'static, ()> {
+        CWD_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Helper: create a temporary directory for tests (unique per call)
+    fn create_temp_dir(name: &str) -> PathBuf {
+        let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let path = std::env::temp_dir().join(format!("git-polyp-test-{}-{}-{}", name, std::process::id(), id));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    /// Helper: clean up a temporary directory
+    fn cleanup_temp_dir(path: &Path) {
+        let _ = std::fs::remove_dir_all(path);
+    }
+
+    /// Helper: run a git command in a specific directory
+    fn git(dir: &Path, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .expect("failed to run git");
+        assert!(
+            output.status.success(),
+            "git {} failed in {}: {}",
+            args.join(" "),
+            dir.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap().trim().to_string()
+    }
+
+    /// Helper: set up a "remote" repo with an initial commit on main,
+    /// and a bare clone pointing to it as origin.
+    /// Returns (remote_dir, bare_dir).
+    fn setup_remote_and_bare_clone() -> (PathBuf, PathBuf) {
+        let remote_dir = create_temp_dir("remote");
+        let bare_dir = create_temp_dir("bare");
+        // remove bare_dir so git clone can create it
+        std::fs::remove_dir_all(&bare_dir).unwrap();
+
+        // Init the "remote" repo
+        git(&remote_dir, &["init", "-b", "main"]);
+        git(&remote_dir, &["config", "user.email", "test@test.com"]);
+        git(&remote_dir, &["config", "user.name", "Test"]);
+        std::fs::write(remote_dir.join("file.txt"), "hello").unwrap();
+        git(&remote_dir, &["add", "."]);
+        git(&remote_dir, &["commit", "-m", "initial"]);
+
+        // Clone as bare
+        git(
+            &std::env::temp_dir(),
+            &["clone", "--bare", remote_dir.to_str().unwrap(), bare_dir.to_str().unwrap()],
+        );
+
+        (remote_dir, bare_dir)
+    }
+
+    /// Helper: create a branch with a commit on the "remote" repo
+    fn create_remote_branch(remote_dir: &Path, branch_name: &str, filename: &str) {
+        git(remote_dir, &["checkout", "-b", branch_name]);
+        std::fs::write(remote_dir.join(filename), format!("content for {}", branch_name)).unwrap();
+        git(remote_dir, &["add", "."]);
+        git(remote_dir, &["commit", "-m", &format!("add {}", branch_name)]);
+        // Go back to main so subsequent calls don't stack branches
+        git(remote_dir, &["checkout", "main"]);
+    }
+
+    // =========================================================================
+    // branch_exists
+    // =========================================================================
+
+    #[test]
+    fn test_branch_exists_returns_true_for_local_branch() {
+        let _lock = lock_cwd();
+        let (remote_dir, bare_dir) = setup_remote_and_bare_clone();
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&bare_dir).unwrap();
+
+        let result = branch_exists("main", &false).unwrap();
+        assert!(result, "main branch should exist locally in bare clone");
+
+        std::env::set_current_dir(&original_dir).unwrap();
+        cleanup_temp_dir(&bare_dir);
+        cleanup_temp_dir(&remote_dir);
+    }
+
+    #[test]
+    fn test_branch_exists_returns_false_for_unknown_branch() {
+        let _lock = lock_cwd();
+        let (remote_dir, bare_dir) = setup_remote_and_bare_clone();
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&bare_dir).unwrap();
+
+        let result = branch_exists("does-not-exist", &false).unwrap();
+        assert!(!result, "non-existent branch should not be found");
+
+        std::env::set_current_dir(&original_dir).unwrap();
+        cleanup_temp_dir(&bare_dir);
+        cleanup_temp_dir(&remote_dir);
+    }
+
+    // =========================================================================
+    // remote_branch_exists
+    // =========================================================================
+
+    #[test]
+    fn test_remote_branch_exists_finds_branch_pushed_after_clone() {
+        let _lock = lock_cwd();
+        let (remote_dir, bare_dir) = setup_remote_and_bare_clone();
+        let original_dir = std::env::current_dir().unwrap();
+
+        // Create a new branch on the remote AFTER the bare clone
+        create_remote_branch(&remote_dir, "feature-remote", "feature.txt");
+
+        std::env::set_current_dir(&bare_dir).unwrap();
+
+        // branch_exists should NOT find it (no local ref yet)
+        let local = branch_exists("feature-remote", &false).unwrap();
+        assert!(!local, "branch should not exist locally before fetch");
+
+        // remote_branch_exists SHOULD find it (queries the remote via ls-remote)
+        let remote = remote_branch_exists("feature-remote", &false).unwrap();
+        assert!(remote, "branch should be found on the remote");
+
+        std::env::set_current_dir(&original_dir).unwrap();
+        cleanup_temp_dir(&bare_dir);
+        cleanup_temp_dir(&remote_dir);
+    }
+
+    #[test]
+    fn test_remote_branch_exists_returns_false_for_unknown() {
+        let _lock = lock_cwd();
+        let (remote_dir, bare_dir) = setup_remote_and_bare_clone();
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&bare_dir).unwrap();
+
+        let result = remote_branch_exists("no-such-branch", &false).unwrap();
+        assert!(!result, "non-existent branch should not be found on remote");
+
+        std::env::set_current_dir(&original_dir).unwrap();
+        cleanup_temp_dir(&bare_dir);
+        cleanup_temp_dir(&remote_dir);
+    }
+
+    // =========================================================================
+    // fetch_branch
+    // =========================================================================
+
+    #[test]
+    fn test_fetch_branch_makes_remote_branch_available_locally() {
+        let _lock = lock_cwd();
+        let (remote_dir, bare_dir) = setup_remote_and_bare_clone();
+        let original_dir = std::env::current_dir().unwrap();
+
+        // Create a new branch on the remote after the clone
+        create_remote_branch(&remote_dir, "feature-fetch", "fetch.txt");
+
+        std::env::set_current_dir(&bare_dir).unwrap();
+
+        // Not available locally yet
+        assert!(!branch_exists("feature-fetch", &false).unwrap());
+
+        // Fetch the branch
+        fetch_branch("feature-fetch", &false).unwrap();
+
+        // Now it should be available locally
+        assert!(
+            branch_exists("feature-fetch", &false).unwrap(),
+            "branch should exist locally after fetch"
+        );
+
+        std::env::set_current_dir(&original_dir).unwrap();
+        cleanup_temp_dir(&bare_dir);
+        cleanup_temp_dir(&remote_dir);
+    }
+
+    #[test]
+    fn test_fetch_branch_fails_for_nonexistent_branch() {
+        let _lock = lock_cwd();
+        let (remote_dir, bare_dir) = setup_remote_and_bare_clone();
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&bare_dir).unwrap();
+
+        let result = fetch_branch("no-such-branch", &false);
+        assert!(result.is_err(), "fetching non-existent branch should fail");
+
+        std::env::set_current_dir(&original_dir).unwrap();
+        cleanup_temp_dir(&bare_dir);
+        cleanup_temp_dir(&remote_dir);
+    }
+
+    // =========================================================================
+    // End-to-end: the full flow that run_add/run_switch now uses
+    // =========================================================================
+
+    #[test]
+    fn test_worktree_add_works_after_fetching_remote_branch() {
+        let _lock = lock_cwd();
+        let (remote_dir, bare_dir) = setup_remote_and_bare_clone();
+        let original_dir = std::env::current_dir().unwrap();
+
+        // Create a new branch on the remote after the clone
+        create_remote_branch(&remote_dir, "feature-worktree", "wt.txt");
+
+        std::env::set_current_dir(&bare_dir).unwrap();
+
+        // Simulate the fixed run_add flow:
+        // 1. branch_exists → false
+        assert!(!branch_exists("feature-worktree", &false).unwrap());
+        // 2. remote_branch_exists → true
+        assert!(remote_branch_exists("feature-worktree", &false).unwrap());
+        // 3. fetch_branch
+        fetch_branch("feature-worktree", &false).unwrap();
+        // 4. worktree_add succeeds
+        let wt_path = create_temp_dir("wt-output");
+        let _ = std::fs::remove_dir_all(&wt_path); // worktree_add creates it
+        let result = worktree_add(wt_path.to_str().unwrap(), "feature-worktree", &false);
+        assert!(result.is_ok(), "worktree_add should succeed after fetch: {:?}", result.err());
+
+        // Verify the worktree directory was created with the right content
+        assert!(wt_path.join("wt.txt").exists(), "worktree should contain the file from the remote branch");
+
+        // Clean up
+        let _ = Command::new("git")
+            .args(&["worktree", "remove", "--force", wt_path.to_str().unwrap()])
+            .current_dir(&bare_dir)
+            .output();
+        std::env::set_current_dir(&original_dir).unwrap();
+        cleanup_temp_dir(&wt_path);
+        cleanup_temp_dir(&bare_dir);
+        cleanup_temp_dir(&remote_dir);
+    }
+
+    #[test]
+    fn test_worktree_add_without_fetch_fails_for_remote_only_branch() {
+        let _lock = lock_cwd();
+        let (remote_dir, bare_dir) = setup_remote_and_bare_clone();
+        let original_dir = std::env::current_dir().unwrap();
+
+        // Create a new branch on the remote after the clone
+        create_remote_branch(&remote_dir, "feature-nofetch", "nofetch.txt");
+
+        std::env::set_current_dir(&bare_dir).unwrap();
+
+        // Without fetching, worktree_add should fail
+        let wt_path = create_temp_dir("wt-nofetch");
+        let _ = std::fs::remove_dir_all(&wt_path);
+        let result = worktree_add(wt_path.to_str().unwrap(), "feature-nofetch", &false);
+        assert!(result.is_err(), "worktree_add should fail without fetch for remote-only branch");
+
+        std::env::set_current_dir(&original_dir).unwrap();
+        cleanup_temp_dir(&wt_path);
+        cleanup_temp_dir(&bare_dir);
+        cleanup_temp_dir(&remote_dir);
+    }
 }

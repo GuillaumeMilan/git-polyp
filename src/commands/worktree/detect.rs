@@ -9,6 +9,15 @@ pub enum DetectError {
     IoError(std::io::Error),
 }
 
+impl std::fmt::Display for DetectError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DetectError::NotFound => write!(f, "worktree root not found"),
+            DetectError::IoError(e) => write!(f, "IO error: {}", e),
+        }
+    }
+}
+
 impl From<std::io::Error> for DetectError {
     fn from(err: std::io::Error) -> Self {
         DetectError::IoError(err)
@@ -38,11 +47,6 @@ pub fn find_worktree_root_from(start_path: &Path) -> Result<PathBuf, DetectError
     }
 }
 
-/// Check if a path is inside a git-polyp worktree workspace
-pub fn is_in_worktree_workspace() -> bool {
-    find_worktree_root().is_ok()
-}
-
 /// Check if a path contains a git-polyp worktree workspace (has .git-polyp-worktree.json)
 pub fn is_worktree_root(path: &Path) -> bool {
     path.join(METADATA_FILENAME).exists()
@@ -51,11 +55,6 @@ pub fn is_worktree_root(path: &Path) -> bool {
 /// Get the path to the bare repository (.bare directory)
 pub fn get_bare_repo_path(worktree_root: &Path) -> PathBuf {
     worktree_root.join(".bare")
-}
-
-/// Get the path to the template directory
-pub fn get_template_path(worktree_root: &Path) -> PathBuf {
-    worktree_root.join(".template")
 }
 
 #[cfg(test)]
@@ -100,24 +99,6 @@ mod tests {
     fn test_get_bare_repo_path_relative() {
         let root = PathBuf::from("my-repo");
         assert_eq!(get_bare_repo_path(&root), PathBuf::from("my-repo/.bare"));
-    }
-
-    #[test]
-    fn test_get_template_path() {
-        let root = PathBuf::from("/some/path");
-        assert_eq!(
-            get_template_path(&root),
-            PathBuf::from("/some/path/.template")
-        );
-    }
-
-    #[test]
-    fn test_get_template_path_relative() {
-        let root = PathBuf::from("my-repo");
-        assert_eq!(
-            get_template_path(&root),
-            PathBuf::from("my-repo/.template")
-        );
     }
 
     #[test]
@@ -206,10 +187,7 @@ mod tests {
         let root = PathBuf::from("/workspace/my-project");
 
         let bare = get_bare_repo_path(&root);
-        let template = get_template_path(&root);
-
         assert_eq!(bare, PathBuf::from("/workspace/my-project/.bare"));
-        assert_eq!(template, PathBuf::from("/workspace/my-project/.template"));
 
         // Verify the metadata filename constant matches the spec
         assert_eq!(METADATA_FILENAME, ".git-polyp-worktree.json");

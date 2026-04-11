@@ -26,6 +26,16 @@ pub enum MetadataError {
     NotFound,
 }
 
+impl std::fmt::Display for MetadataError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MetadataError::IoError(e) => write!(f, "IO error: {}", e),
+            MetadataError::ParseError(e) => write!(f, "parse error: {}", e),
+            MetadataError::NotFound => write!(f, "metadata file not found"),
+        }
+    }
+}
+
 impl From<io::Error> for MetadataError {
     fn from(err: io::Error) -> Self {
         MetadataError::IoError(err)
@@ -86,57 +96,7 @@ impl WorktreeMetadata {
 }
 
 fn current_timestamp() -> String {
-    use std::time::SystemTime;
-    let now = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap_or_default();
-
-    // Format as ISO 8601 (simplified without chrono dependency)
-    let secs = now.as_secs();
-    let days_since_epoch = secs / 86400;
-    let time_of_day = secs % 86400;
-
-    // Approximate date calculation (not accounting for leap years perfectly, but good enough)
-    let mut year = 1970;
-    let mut remaining_days = days_since_epoch;
-
-    loop {
-        let days_in_year = if is_leap_year(year) { 366 } else { 365 };
-        if remaining_days < days_in_year {
-            break;
-        }
-        remaining_days -= days_in_year;
-        year += 1;
-    }
-
-    let month_days = if is_leap_year(year) {
-        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    } else {
-        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    };
-
-    let mut month = 1;
-    for days in month_days.iter() {
-        if remaining_days < *days {
-            break;
-        }
-        remaining_days -= *days;
-        month += 1;
-    }
-
-    let day = remaining_days + 1;
-    let hours = time_of_day / 3600;
-    let minutes = (time_of_day % 3600) / 60;
-    let seconds = time_of_day % 60;
-
-    format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-        year, month, day, hours, minutes, seconds
-    )
-}
-
-fn is_leap_year(year: u64) -> bool {
-    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+    chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 
 #[cfg(test)]
@@ -326,14 +286,6 @@ mod tests {
         assert!(matches!(result, Err(MetadataError::ParseError(_))));
 
         cleanup_temp_dir(&temp_dir);
-    }
-
-    #[test]
-    fn test_is_leap_year() {
-        assert!(is_leap_year(2000)); // divisible by 400
-        assert!(is_leap_year(2024)); // divisible by 4, not by 100
-        assert!(!is_leap_year(1900)); // divisible by 100, not by 400
-        assert!(!is_leap_year(2023)); // not divisible by 4
     }
 
     #[test]
