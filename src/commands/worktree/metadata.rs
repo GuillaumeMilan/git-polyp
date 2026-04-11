@@ -153,7 +153,10 @@ mod tests {
     #[test]
     fn test_add_worktree_with_different_name_and_branch() {
         let mut metadata = WorktreeMetadata::new("main".to_string());
-        metadata.add_worktree("my-feature".to_string(), "origin/feature-branch".to_string());
+        metadata.add_worktree(
+            "my-feature".to_string(),
+            "origin/feature-branch".to_string(),
+        );
 
         let entry = metadata.get_worktree("my-feature").unwrap();
         assert_eq!(entry.branch, "origin/feature-branch");
@@ -298,7 +301,9 @@ mod tests {
         assert!(timestamp.ends_with("Z"));
 
         // Verify parts are numeric
-        let parts: Vec<&str> = timestamp.split(|c| c == '-' || c == 'T' || c == ':' || c == 'Z').collect();
+        let parts: Vec<&str> = timestamp
+            .split(|c| c == '-' || c == 'T' || c == ':' || c == 'Z')
+            .collect();
         assert!(parts[0].parse::<u32>().is_ok()); // year
         assert!(parts[1].parse::<u32>().is_ok()); // month
         assert!(parts[2].parse::<u32>().is_ok()); // day

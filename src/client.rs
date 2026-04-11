@@ -225,8 +225,8 @@ fn print_command(args: &Vec<String>, verbose: &bool) {
 /// Detach HEAD in the current repo by pointing it to a raw SHA.
 /// This frees up the current branch so it can be used by a worktree.
 pub fn detach_head(verbose: &bool) -> Result<(), ClientError> {
-    let head_sha = GitCommand::new(vec!["rev-parse".to_string(), "HEAD".to_string()], verbose)
-        .execute()?;
+    let head_sha =
+        GitCommand::new(vec!["rev-parse".to_string(), "HEAD".to_string()], verbose).execute()?;
 
     GitCommand::new(
         vec![
@@ -346,7 +346,9 @@ pub fn is_branch_merged(branch: &str, into: &str, verbose: &bool) -> Result<bool
     )
     .execute()?;
 
-    Ok(output.lines().any(|line| line.trim().trim_start_matches("* ") == branch))
+    Ok(output
+        .lines()
+        .any(|line| line.trim().trim_start_matches("* ") == branch))
 }
 
 /// Detect the main branch name (main, master, or default)
@@ -439,7 +441,16 @@ pub fn worktree_current_branch(path: &str, verbose: &bool) -> Result<Option<Stri
         .output()
         .map_err(|_| ClientError::Command)?;
 
-    print_command(&vec!["-C".to_string(), path.to_string(), "rev-parse".to_string(), "--abbrev-ref".to_string(), "HEAD".to_string()], verbose);
+    print_command(
+        &vec![
+            "-C".to_string(),
+            path.to_string(),
+            "rev-parse".to_string(),
+            "--abbrev-ref".to_string(),
+            "HEAD".to_string(),
+        ],
+        verbose,
+    );
 
     if !output.status.success() {
         return Err(ClientError::NonZeroExitCode);
@@ -466,7 +477,15 @@ pub fn worktree_has_conflicts(path: &str, verbose: &bool) -> Result<bool, Client
         .output()
         .map_err(|_| ClientError::Command)?;
 
-    print_command(&vec!["-C".to_string(), path.to_string(), "rev-parse".to_string(), "--git-dir".to_string()], verbose);
+    print_command(
+        &vec![
+            "-C".to_string(),
+            path.to_string(),
+            "rev-parse".to_string(),
+            "--git-dir".to_string(),
+        ],
+        verbose,
+    );
 
     if !git_dir_output.status.success() {
         return Err(ClientError::NonZeroExitCode);
@@ -489,7 +508,10 @@ pub fn worktree_has_conflicts(path: &str, verbose: &bool) -> Result<bool, Client
     let rebase_apply = git_dir_path.join("rebase-apply");
     let cherry_pick_head = git_dir_path.join("CHERRY_PICK_HEAD");
 
-    Ok(merge_head.exists() || rebase_merge.exists() || rebase_apply.exists() || cherry_pick_head.exists())
+    Ok(merge_head.exists()
+        || rebase_merge.exists()
+        || rebase_apply.exists()
+        || cherry_pick_head.exists())
 }
 
 /// Check if a worktree directory is valid (not broken)
@@ -499,7 +521,15 @@ pub fn worktree_is_valid(path: &str, verbose: &bool) -> Result<bool, ClientError
         .output()
         .map_err(|_| ClientError::Command)?;
 
-    print_command(&vec!["-C".to_string(), path.to_string(), "rev-parse".to_string(), "--is-inside-work-tree".to_string()], verbose);
+    print_command(
+        &vec![
+            "-C".to_string(),
+            path.to_string(),
+            "rev-parse".to_string(),
+            "--is-inside-work-tree".to_string(),
+        ],
+        verbose,
+    );
 
     if !output.status.success() {
         return Ok(false);
@@ -548,7 +578,10 @@ mod tests {
     use super::*;
     use std::path::{Path, PathBuf};
     use std::process::Command;
-    use std::sync::{Mutex, atomic::{AtomicU32, Ordering}};
+    use std::sync::{
+        Mutex,
+        atomic::{AtomicU32, Ordering},
+    };
 
     static TEST_COUNTER: AtomicU32 = AtomicU32::new(0);
     /// Mutex to serialize tests that need to change the process working directory.
@@ -562,7 +595,12 @@ mod tests {
     /// Helper: create a temporary directory for tests (unique per call)
     fn create_temp_dir(name: &str) -> PathBuf {
         let id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let path = std::env::temp_dir().join(format!("git-polyp-test-{}-{}-{}", name, std::process::id(), id));
+        let path = std::env::temp_dir().join(format!(
+            "git-polyp-test-{}-{}-{}",
+            name,
+            std::process::id(),
+            id
+        ));
         let _ = std::fs::remove_dir_all(&path);
         std::fs::create_dir_all(&path).unwrap();
         path
@@ -610,7 +648,12 @@ mod tests {
         // Clone as bare
         git(
             &std::env::temp_dir(),
-            &["clone", "--bare", remote_dir.to_str().unwrap(), bare_dir.to_str().unwrap()],
+            &[
+                "clone",
+                "--bare",
+                remote_dir.to_str().unwrap(),
+                bare_dir.to_str().unwrap(),
+            ],
         );
 
         (remote_dir, bare_dir)
@@ -619,9 +662,16 @@ mod tests {
     /// Helper: create a branch with a commit on the "remote" repo
     fn create_remote_branch(remote_dir: &Path, branch_name: &str, filename: &str) {
         git(remote_dir, &["checkout", "-b", branch_name]);
-        std::fs::write(remote_dir.join(filename), format!("content for {}", branch_name)).unwrap();
+        std::fs::write(
+            remote_dir.join(filename),
+            format!("content for {}", branch_name),
+        )
+        .unwrap();
         git(remote_dir, &["add", "."]);
-        git(remote_dir, &["commit", "-m", &format!("add {}", branch_name)]);
+        git(
+            remote_dir,
+            &["commit", "-m", &format!("add {}", branch_name)],
+        );
         // Go back to main so subsequent calls don't stack branches
         git(remote_dir, &["checkout", "main"]);
     }
@@ -776,10 +826,17 @@ mod tests {
         let wt_path = create_temp_dir("wt-output");
         let _ = std::fs::remove_dir_all(&wt_path); // worktree_add creates it
         let result = worktree_add(wt_path.to_str().unwrap(), "feature-worktree", &false);
-        assert!(result.is_ok(), "worktree_add should succeed after fetch: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "worktree_add should succeed after fetch: {:?}",
+            result.err()
+        );
 
         // Verify the worktree directory was created with the right content
-        assert!(wt_path.join("wt.txt").exists(), "worktree should contain the file from the remote branch");
+        assert!(
+            wt_path.join("wt.txt").exists(),
+            "worktree should contain the file from the remote branch"
+        );
 
         // Clean up
         let _ = Command::new("git")
@@ -807,7 +864,10 @@ mod tests {
         let wt_path = create_temp_dir("wt-nofetch");
         let _ = std::fs::remove_dir_all(&wt_path);
         let result = worktree_add(wt_path.to_str().unwrap(), "feature-nofetch", &false);
-        assert!(result.is_err(), "worktree_add should fail without fetch for remote-only branch");
+        assert!(
+            result.is_err(),
+            "worktree_add should fail without fetch for remote-only branch"
+        );
 
         std::env::set_current_dir(&original_dir).unwrap();
         cleanup_temp_dir(&wt_path);
