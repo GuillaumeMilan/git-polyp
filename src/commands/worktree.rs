@@ -170,6 +170,14 @@ fn run_init(url: &str, path: Option<&str>, verbose: bool) {
         }
     };
 
+    // Detach HEAD so the main branch is free to be used by a worktree
+    if let Err(e) = client::detach_head(&verbose) {
+        let _ = std::env::set_current_dir(&original_dir);
+        let _ = std::fs::remove_dir_all(dest_path);
+        eprintln!("{}", format!("Failed to detach HEAD in bare repo: {:?}", e).deco_as_error());
+        std::process::exit(1);
+    }
+
     // Change back to original directory
     let _ = std::env::set_current_dir(&original_dir);
 

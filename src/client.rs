@@ -222,6 +222,25 @@ fn print_command(args: &Vec<String>, verbose: &bool) {
 // Worktree-related functions
 // ============================================================================
 
+/// Detach HEAD in the current repo by pointing it to a raw SHA.
+/// This frees up the current branch so it can be used by a worktree.
+pub fn detach_head(verbose: &bool) -> Result<(), ClientError> {
+    let head_sha = GitCommand::new(vec!["rev-parse".to_string(), "HEAD".to_string()], verbose)
+        .execute()?;
+
+    GitCommand::new(
+        vec![
+            "update-ref".to_string(),
+            "--no-deref".to_string(),
+            "HEAD".to_string(),
+            head_sha,
+        ],
+        verbose,
+    )
+    .execute()
+    .map(|_| ())
+}
+
 /// Clone a repository as a bare repo
 pub fn clone_bare(url: &str, dest: &str, verbose: &bool) -> Result<(), ClientError> {
     GitCommand::new(
