@@ -2,7 +2,6 @@ use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use std::fs;
 
-use crate::ResultExt;
 use crate::client;
 use crate::io;
 use crate::io::Decorate;
@@ -254,10 +253,8 @@ fn build_stack(
         Ok(commits) => {
             let mut stack = Vec::new();
             for commit in commits {
-                let branches = client::branches_at(&commit, verbose)
-                    .unwrap_or_exit("Failed to get branches containing the commit.");
-                let message = client::commit_message(&commit, verbose)
-                    .unwrap_or_exit("Failed to get the commit message.");
+                let branches = client::branches_at(&commit, verbose)?;
+                let message = client::commit_message(&commit, verbose)?;
                 stack.push(StackEntry::new(commit, branches, message));
             }
             io::explain(
