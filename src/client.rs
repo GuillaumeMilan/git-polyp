@@ -15,11 +15,8 @@ pub enum ClientError {
 }
 
 impl GitCommand {
-    fn new(args: Vec<String>, verbose: &bool) -> Self {
-        Self {
-            args,
-            verbose: verbose.clone(),
-        }
+    fn new(args: Vec<String>, verbose: bool) -> Self {
+        Self { args, verbose }
     }
 
     fn execute(&self) -> Result<String, ClientError> {
@@ -436,11 +433,6 @@ pub fn get_ahead_behind(branch: &str, verbose: &bool) -> Result<(u32, u32), Clie
 
 /// Get the current branch of a worktree at a specific path
 pub fn worktree_current_branch(path: &str, verbose: &bool) -> Result<Option<String>, ClientError> {
-    let output = std::process::Command::new("git")
-        .args(&["-C", path, "rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .map_err(|_| ClientError::Command)?;
-
     print_command(
         &vec![
             "-C".to_string(),
@@ -451,6 +443,11 @@ pub fn worktree_current_branch(path: &str, verbose: &bool) -> Result<Option<Stri
         ],
         verbose,
     );
+
+    let output = std::process::Command::new("git")
+        .args(&["-C", path, "rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .map_err(|_| ClientError::Command)?;
 
     if !output.status.success() {
         return Err(ClientError::NonZeroExitCode);
@@ -472,11 +469,6 @@ pub fn worktree_current_branch(path: &str, verbose: &bool) -> Result<Option<Stri
 /// Check if a worktree has a merge/rebase/cherry-pick in progress
 pub fn worktree_has_conflicts(path: &str, verbose: &bool) -> Result<bool, ClientError> {
     // Check for various conflict states by looking for marker files
-    let git_dir_output = std::process::Command::new("git")
-        .args(&["-C", path, "rev-parse", "--git-dir"])
-        .output()
-        .map_err(|_| ClientError::Command)?;
-
     print_command(
         &vec![
             "-C".to_string(),
@@ -486,6 +478,11 @@ pub fn worktree_has_conflicts(path: &str, verbose: &bool) -> Result<bool, Client
         ],
         verbose,
     );
+
+    let git_dir_output = std::process::Command::new("git")
+        .args(&["-C", path, "rev-parse", "--git-dir"])
+        .output()
+        .map_err(|_| ClientError::Command)?;
 
     if !git_dir_output.status.success() {
         return Err(ClientError::NonZeroExitCode);
@@ -516,11 +513,6 @@ pub fn worktree_has_conflicts(path: &str, verbose: &bool) -> Result<bool, Client
 
 /// Check if a worktree directory is valid (not broken)
 pub fn worktree_is_valid(path: &str, verbose: &bool) -> Result<bool, ClientError> {
-    let output = std::process::Command::new("git")
-        .args(&["-C", path, "rev-parse", "--is-inside-work-tree"])
-        .output()
-        .map_err(|_| ClientError::Command)?;
-
     print_command(
         &vec![
             "-C".to_string(),
@@ -530,6 +522,11 @@ pub fn worktree_is_valid(path: &str, verbose: &bool) -> Result<bool, ClientError
         ],
         verbose,
     );
+
+    let output = std::process::Command::new("git")
+        .args(&["-C", path, "rev-parse", "--is-inside-work-tree"])
+        .output()
+        .map_err(|_| ClientError::Command)?;
 
     if !output.status.success() {
         return Ok(false);
