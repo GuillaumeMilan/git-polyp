@@ -1,5 +1,8 @@
+pub mod completions;
 pub mod rebase_stack;
+pub mod worktree;
 use clap::Parser;
+use clap_complete::Shell;
 
 #[derive(Parser, Debug)]
 pub enum Commands {
@@ -28,5 +31,13 @@ pub enum Commands {
     },
     Unstack {
         from: String,
+    },
+    /// Manage git-polyp worktree workspaces
+    Worktree(worktree::WorktreeArgs),
+    /// Generate shell completions
+    Completions {
+        /// The shell to generate completions for
+        #[arg(value_enum)]
+        shell: Shell,
     },
 }

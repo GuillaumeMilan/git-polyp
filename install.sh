@@ -116,25 +116,94 @@ install_binary() {
     fi
 }
 
+detect_shell() {
+    # Detect from SHELL environment variable (user's login shell)
+    if [ -n "$SHELL" ]; then
+        case "$SHELL" in
+            */bash) echo "bash"; return ;;
+            */zsh)  echo "zsh"; return ;;
+            */fish) echo "fish"; return ;;
+        esac
+    fi
+    echo "unknown"
+}
+
+install_bash_completion() {
+    local install_dirs=(
+        "/usr/local/etc/bash_completion.d"
+        "/etc/bash_completion.d"
+        "$HOME/.local/share/bash-completion/completions"
+    )
+
+    for dir in "${install_dirs[@]}"; do
+        if [ -d "$dir" ] && [ -w "$dir" ]; then
+            git-polyp completions bash > "$dir/git-polyp"
+            print_success "Bash completions installed to $dir/git-polyp"
+            print_info "Restart your shell or run: source $dir/git-polyp"
+            return 0
+        fi
+    done
+
+    # Fallback
+    print_warning "Could not find writable bash completion directory"
+    print_info "Run manually: git-polyp completions bash > ~/.bash_completion.d/git-polyp"
+}
+
+install_zsh_completion() {
+    local install_dir="$HOME/.zsh/completions"
+
+    mkdir -p "$install_dir"
+    git-polyp completions zsh > "$install_dir/_git-polyp"
+    print_success "Zsh completions installed to $install_dir/_git-polyp"
+
+    # Check if fpath is configured
+    local zshrc="$HOME/.zshrc"
+    if [ -f "$zshrc" ]; then
+        if ! grep -q "fpath=(.*\.zsh/completions" "$zshrc" 2>/dev/null; then
+            print_info "Add to your ~/.zshrc:"
+            echo ""
+            echo "    fpath=(~/.zsh/completions \$fpath)"
+            echo "    autoload -Uz compinit && compinit"
+            echo ""
+        fi
+    fi
+    print_info "Restart your shell or run: exec zsh"
+}
+
+install_fish_completion() {
+    local install_dir="$HOME/.config/fish/completions"
+
+    mkdir -p "$install_dir"
+    git-polyp completions fish > "$install_dir/git-polyp.fish"
+    print_success "Fish completions installed to $install_dir/git-polyp.fish"
+    print_info "Completions will be available in new Fish sessions"
+}
+
 install_completions() {
     print_info "Installing shell completions..."
-    
-    local completions_script="$SCRIPT_DIR/completions/install.sh"
-    
-    if [ ! -f "$completions_script" ]; then
-        print_error "Completions install script not found at $completions_script"
-        exit 1
+
+    # Verify git-polyp is available
+    if ! command -v git-polyp >/dev/null 2>&1; then
+        print_error "git-polyp not found in PATH. Install binary first."
+        return 1
     fi
-    
-    # Make sure the script is executable
-    chmod +x "$completions_script"
-    
-    # Run the completions installer
-    if "$completions_script"; then
-        print_success "Shell completions installed"
-    else
-        print_warning "Shell completions installation failed, but continuing..."
+
+    local target_shell
+    target_shell=$(detect_shell)
+
+    if [ "$target_shell" = "unknown" ]; then
+        print_warning "Could not detect shell. Skipping completions."
+        print_info "Generate manually with: git-polyp completions <bash|zsh|fish>"
+        return 0
     fi
+
+    print_info "Detected shell: $target_shell"
+
+    case "$target_shell" in
+        bash) install_bash_completion ;;
+        zsh)  install_zsh_completion ;;
+        fish) install_fish_completion ;;
+    esac
 }
 
 show_usage() {
@@ -146,14 +215,19 @@ Install git-polyp binary and shell completions.
 Options:
   --clean           Clean build artifacts before building
   --binary-only     Install only the binary, skip completions
-  --completions-only Install only completions, skip building and binary installation
+  --completions-only Install only completions (requires git-polyp in PATH)
   -h, --help        Show this help message
 
 Examples:
   $0                # Build and install everything
   $0 --clean        # Clean build, then install everything
   $0 --binary-only  # Build and install only the binary
-  $0 --completions-only # Install only completions
+  $0 --completions-only # Install completions (binary must be installed)
+
+Manual completion generation:
+  git-polyp completions bash > /path/to/completions
+  git-polyp completions zsh > ~/.zsh/completions/_git-polyp
+  git-polyp completions fish > ~/.config/fish/completions/git-polyp.fish
 
 EOF
 }
