@@ -150,6 +150,14 @@ fn run_init(url: &str, path: Option<&str>, verbose: bool) -> Result<(), AppError
         ));
     }
 
+    // Configure fetch refspec (git clone --bare omits it)
+    if let Err(e) = client::configure_bare_fetch_refspec(bare_path.to_str().unwrap(), verbose) {
+        let _ = std::fs::remove_dir_all(dest_path);
+        return Err(AppError::Message(
+            format!("Failed to configure fetch refspec: {:?}", e).deco_as_error(),
+        ));
+    }
+
     // Create .template directory
     let template_path = dest_path.join(".template");
     if let Err(e) = std::fs::create_dir(&template_path) {
@@ -729,21 +737,12 @@ fn run_clean(
     };
 
     if should_delete_branch {
-        // Change back to bare repo for branch deletion
-        if let Err(e) = std::env::set_current_dir(&bare_path) {
-            return Err(AppError::Message(
-                format!("Failed to change to bare repo directory: {}", e).deco_as_error(),
-            ));
-        }
-
-        if let Err(e) = client::delete_branch(branch, force, verbose) {
-            let _ = std::env::set_current_dir(&original_dir);
+        if let Err(e) = client::delete_branch(branch, force, &bare_path, verbose) {
             eprintln!(
                 "{}",
                 format!("Warning: Failed to delete branch '{}': {:?}", branch, e).bright_yellow()
             );
         } else {
-            let _ = std::env::set_current_dir(&original_dir);
             println!("{}", format!("Deleted branch '{}'", branch).bright_green());
         }
     }
@@ -855,90 +854,47 @@ fn run_switch(branch: &str, verbose: bool) -> Result<(), AppError> {
         .map_err(|_| AppError::Message("Not in a git-polyp worktree workspace.".deco_as_error()))?;
 
     // Load metadata to verify the worktree exists
-    let mut metadata = metadata::WorktreeMetadata::load(&worktree_root).map_err(|e| {
+    let metadata = metadata::WorktreeMetadata::load(&worktree_root).map_err(|e| {
         AppError::Message(format!("Failed to load metadata: {:?}", e).deco_as_error())
     })?;
 
-    // If worktree doesn't exist yet, try to create it from remote
     if !metadata.has_worktree(branch) {
+        // Check if the branch exists to give a helpful error message
         let bare_path = detect::get_bare_repo_path(&worktree_root);
         let original_dir = std::env::current_dir().unwrap();
+        let _ = std::env::set_current_dir(&bare_path);
 
-        if let Err(e) = std::env::set_current_dir(&bare_path) {
-            return Err(AppError::Message(
-                format!("Failed to change to bare repo directory: {}", e).deco_as_error(),
-            ));
-        }
+        let branch_exists = client::branch_exists(branch, verbose).unwrap_or(false)
+            || client::remote_branch_exists(branch, verbose).unwrap_or(false);
 
-        // Check if branch exists locally
-        let local_exists = match client::branch_exists(branch, verbose) {
-            Ok(exists) => exists,
-            Err(_) => false,
-        };
-
-        // Check if branch exists on the remote
-        let remote_exists = if !local_exists {
-            match client::remote_branch_exists(branch, verbose) {
-                Ok(exists) => exists,
-                Err(_) => false,
-            }
-        } else {
-            false
-        };
-
-        if !local_exists && !remote_exists {
-            let _ = std::env::set_current_dir(&original_dir);
-            return Err(AppError::Message(
-                format!("Branch '{}' not found locally or on remote.", branch).deco_as_error(),
-            ));
-        }
-
-        // Fetch from remote if needed
-        if remote_exists {
-            eprintln!("Fetching branch '{}' from remote...", branch.bright_cyan());
-            if let Err(e) = client::fetch_branch(branch, verbose) {
-                let _ = std::env::set_current_dir(&original_dir);
-                return Err(AppError::Message(
-                    format!("Failed to fetch branch from remote: {:?}", e).deco_as_error(),
-                ));
-            }
-        }
-
-        // Create the worktree
-        let worktree_path = worktree_root.join(branch);
-        let worktree_path_str = worktree_path.to_str().unwrap();
-
-        eprintln!("Creating worktree for branch '{}'...", branch.bright_cyan());
-        if let Err(e) = client::worktree_add(worktree_path_str, branch, verbose) {
-            let _ = std::env::set_current_dir(&original_dir);
-            return Err(AppError::Message(
-                format!("Failed to create worktree: {:?}", e).deco_as_error(),
-            ));
-        }
-
-        // Update metadata
-        metadata.add_worktree(branch.to_string(), branch.to_string());
         let _ = std::env::set_current_dir(&original_dir);
 
-        if let Err(e) = metadata.save(&worktree_root) {
-            eprintln!(
-                "{}",
-                format!("Warning: Failed to update metadata: {:?}", e).bright_yellow()
-            );
-        }
-
-        eprintln!(
-            "{}",
-            format!("Created worktree for branch '{}'", branch).bright_green()
-        );
+        return if branch_exists {
+            Err(AppError::Message(
+                format!(
+                    "No worktree for branch '{}'. Run 'git-polyp worktree add {}' to create one.",
+                    branch, branch
+                )
+                .deco_as_error(),
+            ))
+        } else {
+            Err(AppError::Message(
+                format!("Branch '{}' does not exist.", branch).deco_as_error(),
+            ))
+        };
     }
 
     // Get worktree path
     let worktree_path = worktree_root.join(branch);
 
-    // Check if the directory actually exists
     if !worktree_path.exists() {
-        return Err(AppError::Message(format!("Worktree directory '{}' does not exist. Run 'git-polyp worktree add {}' to create it.", branch, branch).deco_as_error()));
+        return Err(AppError::Message(
+            format!(
+                "Worktree directory '{}' is missing. Run 'git-polyp worktree add {}' to recreate it.",
+                branch, branch
+            )
+            .deco_as_error(),
+        ));
     }
 
     // Output the absolute path for use with cd
@@ -1101,7 +1057,7 @@ fn run_prune(verbose: bool) -> Result<(), AppError> {
         // Ask about branch deletion
         match YNQuestion::new(format!("Also delete branch '{}'?", candidate.name)).ask() {
             Ok(true) => {
-                if let Err(e) = client::delete_branch(&candidate.name, true, verbose) {
+                if let Err(e) = client::delete_branch(&candidate.name, true, &bare_path, verbose) {
                     eprintln!(
                         "{}",
                         format!("  Warning: Failed to delete branch: {:?}", e).bright_yellow()

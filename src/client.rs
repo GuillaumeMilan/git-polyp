@@ -253,6 +253,24 @@ pub fn clone_bare(url: &str, dest: &str, verbose: bool) -> Result<(), ClientErro
     .map(|_| ())
 }
 
+/// Configure the default fetch refspec for a bare repo.
+/// `git clone --bare` omits `remote.origin.fetch`, so `git fetch` won't
+/// discover remote branches without this.
+pub fn configure_bare_fetch_refspec(bare_dir: &str, verbose: bool) -> Result<(), ClientError> {
+    GitCommand::new(
+        vec![
+            "-C".to_string(),
+            bare_dir.to_string(),
+            "config".to_string(),
+            "remote.origin.fetch".to_string(),
+            "+refs/heads/*:refs/remotes/origin/*".to_string(),
+        ],
+        verbose,
+    )
+    .execute()
+    .map(|_| ())
+}
+
 /// Add a new worktree
 pub fn worktree_add(path: &str, branch: &str, verbose: bool) -> Result<(), ClientError> {
     GitCommand::new(
@@ -321,10 +339,21 @@ pub fn branch_exists(branch: &str, verbose: bool) -> Result<bool, ClientError> {
 }
 
 /// Delete a branch
-pub fn delete_branch(name: &str, force: bool, verbose: bool) -> Result<(), ClientError> {
+pub fn delete_branch(
+    name: &str,
+    force: bool,
+    dir: &std::path::Path,
+    verbose: bool,
+) -> Result<(), ClientError> {
     let flag = if force { "-D" } else { "-d" };
     GitCommand::new(
-        vec!["branch".to_string(), flag.to_string(), name.to_string()],
+        vec![
+            "-C".to_string(),
+            dir.to_string_lossy().to_string(),
+            "branch".to_string(),
+            flag.to_string(),
+            name.to_string(),
+        ],
         verbose,
     )
     .execute()
