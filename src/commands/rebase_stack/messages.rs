@@ -2,6 +2,11 @@ use crate::io::Decorate;
 
 pub mod error {
     use super::Decorate;
+    use super::super::stack::STACK_FILE;
+
+    fn stack_file_path() -> String {
+        format!(".git/polyp/{}", STACK_FILE)
+    }
 
     pub const NOT_IN_GIT_REPO: &str =
         "Not a git repository. Please run this command inside a git repository.";
@@ -58,7 +63,7 @@ pub mod error {
             If the error persists, please try to remove the {} file manually.\n",
             "Failed to clean the stack state!".deco_as_error(),
             "git-polyp rebase --abort".deco_as_command(),
-            ".git/polyp/stack.json".deco_as_path()
+            stack_file_path().deco_as_path()
         )
     }
 
@@ -69,7 +74,7 @@ pub mod error {
             If the error persists, please try to remove the {} file manually.\n",
             "Failed to clean the stack!".deco_as_error(),
             "git-polyp rebase --abort".deco_as_command(),
-            ".git/polyp/stack.json".deco_as_path()
+            stack_file_path().deco_as_path()
         )
     }
 

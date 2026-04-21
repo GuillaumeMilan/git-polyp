@@ -52,7 +52,7 @@ pub struct Stack {
     entries: Vec<StackEntry>,
 }
 
-const STACK_FILE: &str = "rebase_stack.json";
+pub const STACK_FILE: &str = "rebase_stack.json";
 
 impl Stack {
     pub fn new(
