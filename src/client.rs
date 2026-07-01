@@ -238,7 +238,14 @@ pub fn detach_head(verbose: bool) -> Result<(), ClientError> {
     .map(|_| ())
 }
 
-/// Clone a repository as a bare repo
+/// Clone a repository as a bare repo.
+///
+/// `git clone --bare` copies the remote heads directly into the local
+/// `refs/heads/*` but configures *no* `remote.origin.fetch` refspec, so
+/// remote-tracking branches (`refs/remotes/origin/*`) are never created.
+/// That makes `origin/<branch>` unresolvable (e.g. `git log origin/master`
+/// fails with "unknown revision"). We therefore install the standard refspec
+/// and fetch so the workspace behaves like a normal clone.
 pub fn clone_bare(url: &str, dest: &str, verbose: bool) -> Result<(), ClientError> {
     GitCommand::new(
         vec![
@@ -246,6 +253,50 @@ pub fn clone_bare(url: &str, dest: &str, verbose: bool) -> Result<(), ClientErro
             "--bare".to_string(),
             url.to_string(),
             dest.to_string(),
+        ],
+        verbose,
+    )
+    .execute()?;
+
+    // Configure the standard fetch refspec so future fetches populate
+    // refs/remotes/origin/* (a bare clone leaves this unset).
+    GitCommand::new(
+        vec![
+            "-C".to_string(),
+            dest.to_string(),
+            "config".to_string(),
+            "remote.origin.fetch".to_string(),
+            "+refs/heads/*:refs/remotes/origin/*".to_string(),
+        ],
+        verbose,
+    )
+    .execute()?;
+
+    // Populate remote-tracking branches now so origin/<branch> resolves
+    // immediately after init.
+    GitCommand::new(
+        vec![
+            "-C".to_string(),
+            dest.to_string(),
+            "fetch".to_string(),
+            "origin".to_string(),
+        ],
+        verbose,
+    )
+    .execute()?;
+
+    // Record the remote's default branch as refs/remotes/origin/HEAD.
+    // `git clone --bare` copies every remote head into refs/heads/*, so name
+    // guessing ("main", "master") is ambiguous when a repo has both. This
+    // gives detect_main_branch an authoritative source for the default branch.
+    GitCommand::new(
+        vec![
+            "-C".to_string(),
+            dest.to_string(),
+            "remote".to_string(),
+            "set-head".to_string(),
+            "origin".to_string(),
+            "--auto".to_string(),
         ],
         verbose,
     )
@@ -349,14 +400,10 @@ pub fn is_branch_merged(branch: &str, into: &str, verbose: bool) -> Result<bool,
 
 /// Detect the main branch name (main, master, or default)
 pub fn detect_main_branch(verbose: bool) -> Result<String, ClientError> {
-    // Try common main branch names in order of preference
-    for branch in &["main", "master"] {
-        if branch_exists(branch, verbose)? {
-            return Ok(branch.to_string());
-        }
-    }
-
-    // Try to get the default branch from remote
+    // Prefer the remote's recorded default branch. This is authoritative:
+    // name guessing below is ambiguous because a bare clone copies every
+    // remote head into refs/heads/*, so a repo with both "main" and "master"
+    // would always resolve to "main" regardless of the actual default.
     let output = GitCommand::new(
         vec![
             "symbolic-ref".to_string(),
@@ -368,6 +415,13 @@ pub fn detect_main_branch(verbose: bool) -> Result<String, ClientError> {
 
     if let Ok(ref_output) = output {
         if let Some(branch) = ref_output.strip_prefix("refs/remotes/origin/") {
+            return Ok(branch.to_string());
+        }
+    }
+
+    // No recorded remote default: fall back to common branch names.
+    for branch in &["main", "master"] {
+        if branch_exists(branch, verbose)? {
             return Ok(branch.to_string());
         }
     }
@@ -670,6 +724,104 @@ mod tests {
         );
         // Go back to main so subsequent calls don't stack branches
         git(remote_dir, &["checkout", "main"]);
+    }
+
+    // =========================================================================
+    // clone_bare
+    // =========================================================================
+
+    /// Helper: create a bare "remote" repo with a commit on main to clone from.
+    fn setup_remote_repo() -> PathBuf {
+        let remote_dir = create_temp_dir("clone-src");
+        git(&remote_dir, &["init", "-b", "main"]);
+        git(&remote_dir, &["config", "user.email", "test@test.com"]);
+        git(&remote_dir, &["config", "user.name", "Test"]);
+        std::fs::write(remote_dir.join("file.txt"), "hello").unwrap();
+        git(&remote_dir, &["add", "."]);
+        git(&remote_dir, &["commit", "-m", "initial"]);
+        remote_dir
+    }
+
+    #[test]
+    fn test_clone_bare_configures_fetch_refspec() {
+        let remote_dir = setup_remote_repo();
+        let dest = create_temp_dir("clone-dest");
+        // remove dest so `git clone` can create it
+        std::fs::remove_dir_all(&dest).unwrap();
+
+        clone_bare(remote_dir.to_str().unwrap(), dest.to_str().unwrap(), false).unwrap();
+
+        let refspec = git(&dest, &["config", "--get", "remote.origin.fetch"]);
+        assert_eq!(
+            refspec, "+refs/heads/*:refs/remotes/origin/*",
+            "clone_bare should install the standard fetch refspec"
+        );
+
+        cleanup_temp_dir(&dest);
+        cleanup_temp_dir(&remote_dir);
+    }
+
+    #[test]
+    fn test_clone_bare_creates_remote_tracking_branches() {
+        let remote_dir = setup_remote_repo();
+        let dest = create_temp_dir("clone-dest");
+        std::fs::remove_dir_all(&dest).unwrap();
+
+        clone_bare(remote_dir.to_str().unwrap(), dest.to_str().unwrap(), false).unwrap();
+
+        // origin/main must resolve — this is the regression: a plain
+        // `git clone --bare` leaves refs/remotes/origin/* empty.
+        let refs = git(&dest, &["for-each-ref", "--format=%(refname)", "refs/remotes/"]);
+        assert!(
+            refs.contains("refs/remotes/origin/main"),
+            "expected refs/remotes/origin/main, got: {}",
+            refs
+        );
+        // And `git log origin/main` should succeed.
+        git(&dest, &["rev-parse", "origin/main"]);
+
+        cleanup_temp_dir(&dest);
+        cleanup_temp_dir(&remote_dir);
+    }
+
+    // =========================================================================
+    // detect_main_branch
+    // =========================================================================
+
+    #[test]
+    fn test_detect_main_branch_uses_remote_default_not_name_guess() {
+        // Regression: the remote's default is `master`, but it *also* has a
+        // `main` branch. A bare clone copies both into refs/heads/*, so the
+        // old name-guessing order ("main" first) wrongly picked "main".
+        let _lock = lock_cwd();
+        let remote_dir = create_temp_dir("detect-src");
+        git(&remote_dir, &["init", "-b", "master"]);
+        git(&remote_dir, &["config", "user.email", "test@test.com"]);
+        git(&remote_dir, &["config", "user.name", "Test"]);
+        std::fs::write(remote_dir.join("file.txt"), "hello").unwrap();
+        git(&remote_dir, &["add", "."]);
+        git(&remote_dir, &["commit", "-m", "initial"]);
+        // Add a `main` branch too, but leave HEAD on `master`.
+        git(&remote_dir, &["branch", "main"]);
+
+        let dest = create_temp_dir("detect-dest");
+        std::fs::remove_dir_all(&dest).unwrap();
+        clone_bare(remote_dir.to_str().unwrap(), dest.to_str().unwrap(), false).unwrap();
+
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&dest).unwrap();
+
+        let main_branch = detect_main_branch(false).unwrap();
+
+        std::env::set_current_dir(&original_dir).unwrap();
+
+        assert_eq!(
+            main_branch, "master",
+            "should follow the remote's default branch, not guess 'main'"
+        );
+
+        cleanup_temp_dir(&dest);
+        cleanup_temp_dir(&remote_dir);
     }
 
     // =========================================================================

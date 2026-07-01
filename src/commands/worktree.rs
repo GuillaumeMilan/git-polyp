@@ -208,8 +208,12 @@ fn run_init(url: &str, path: Option<&str>, verbose: bool) -> Result<(), AppError
         ));
     }
 
-    // Create worktree for main branch
-    let main_worktree_path = dest_path.join(&main_branch);
+    // Create worktree for main branch.
+    // Use an absolute path: we've cd'd into the bare repo above, so a path
+    // relative to dest_path would resolve against .bare/ and nest the worktree
+    // (e.g. .bare/<repo>/<branch>). original_dir is absolute and dest_path is
+    // relative to it, so join yields the intended <workspace>/<branch>.
+    let main_worktree_path = original_dir.join(dest_path).join(&main_branch);
     let main_worktree_path_str = main_worktree_path.to_str().unwrap();
 
     println!(
