@@ -526,6 +526,13 @@ fn run_add(branch: &str, base: Option<&str>, verbose: bool) -> Result<(), AppErr
         ));
     }
 
+    if let Err(e) = client::fetch_all(verbose) {
+        eprintln!(
+            "{}",
+            format!("Warning: Failed to fetch from remote: {:?}", e).bright_yellow()
+        );
+    }
+
     // Determine the base ref for new branches
     let base_ref = base
         .map(|s| s.to_string())

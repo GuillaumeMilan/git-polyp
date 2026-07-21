@@ -623,6 +623,20 @@ pub fn fetch_branch(branch: &str, verbose: bool) -> Result<(), ClientError> {
     .map(|_| ())
 }
 
+/// Refresh all remote-tracking branches from origin and prune deleted ones.
+pub fn fetch_all(verbose: bool) -> Result<(), ClientError> {
+    GitCommand::new(
+        vec![
+            "fetch".to_string(),
+            "origin".to_string(),
+            "--prune".to_string(),
+        ],
+        verbose,
+    )
+    .execute()
+    .map(|_| ())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
