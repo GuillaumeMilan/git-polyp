@@ -33,11 +33,12 @@ pub enum WorktreeCommands {
         #[arg(long)]
         base: Option<String>,
     },
-    /// Remove a worktree entry
+    /// Remove one or more worktree entries
     Clean {
-        /// Name of the branch/worktree to remove
-        branch: String,
-        /// Force removal even if worktree has uncommitted changes
+        /// Names of the branches/worktrees to remove
+        #[arg(required = true, num_args = 1..)]
+        branches: Vec<String>,
+        /// Force removal even if a worktree has uncommitted changes
         #[arg(long)]
         force: bool,
         /// Also delete the branch without prompting
@@ -72,12 +73,12 @@ pub fn run(args: WorktreeArgs, verbose: bool) -> Result<(), AppError> {
             run_add(&branch, base.as_deref(), verbose)?;
         }
         WorktreeCommands::Clean {
-            branch,
+            branches,
             force,
             delete_branch,
             keep_branch,
         } => {
-            run_clean(&branch, force, delete_branch, keep_branch, verbose)?;
+            run_clean(&branches, force, delete_branch, keep_branch, verbose)?;
         }
         WorktreeCommands::List => {
             run_list(verbose)?;
@@ -630,8 +631,69 @@ fn run_add(branch: &str, base: Option<&str>, verbose: bool) -> Result<(), AppErr
     Ok(())
 }
 
+/// A worktree that passed validation and is ready to be removed.
+struct CleanTarget<'a> {
+    name: &'a str,
+    dirty: bool,
+}
+
+/// Validate one clean target without touching anything. Err holds the reason it
+/// cannot be removed, already decorated for display.
+fn inspect_clean_target<'a>(
+    branch: &'a str,
+    worktree_root: &Path,
+    metadata: &metadata::WorktreeMetadata,
+    force: bool,
+    verbose: bool,
+) -> Result<CleanTarget<'a>, String> {
+    if branch == metadata.main_branch {
+        return Err(
+            format!("Cannot remove the main branch worktree '{}'.", branch).deco_as_error(),
+        );
+    }
+
+    if !metadata.has_worktree(branch) {
+        return Err(format!("Worktree '{}' not found.", branch).deco_as_error());
+    }
+
+    let worktree_path = worktree_root.join(branch);
+    if !worktree_path.exists() {
+        return Ok(CleanTarget {
+            name: branch,
+            dirty: false,
+        });
+    }
+
+    match client::worktree_is_dirty(worktree_path.to_str().unwrap(), verbose) {
+        Ok(true) if !force => Err(format!(
+            "Worktree '{}' has uncommitted changes. Use --force to remove anyway.",
+            branch
+        )
+        .deco_as_error()),
+        Ok(dirty) => Ok(CleanTarget {
+            name: branch,
+            dirty,
+        }),
+        Err(e) => {
+            Err(format!("Failed to check status of worktree '{}': {:?}", branch, e).deco_as_error())
+        }
+    }
+}
+
+fn should_delete_branch(branch: &str, delete_branch: bool, keep_branch: bool) -> bool {
+    if delete_branch {
+        return true;
+    }
+    if keep_branch {
+        return false;
+    }
+    YNQuestion::new(format!("Also delete branch '{}'?", branch))
+        .ask()
+        .unwrap_or(false)
+}
+
 fn run_clean(
-    branch: &str,
+    branches: &[String],
     force: bool,
     delete_branch: bool,
     keep_branch: bool,
@@ -646,49 +708,28 @@ fn run_clean(
         AppError::Message(format!("Failed to load metadata: {:?}", e).deco_as_error())
     })?;
 
-    // Check if this is the main branch
-    if branch == metadata.main_branch {
-        return Err(AppError::Message(
-            format!("Cannot remove the main branch worktree '{}'.", branch).deco_as_error(),
-        ));
-    }
-
-    // Check if worktree exists in metadata
-    if !metadata.has_worktree(branch) {
-        return Err(AppError::Message(
-            format!("Worktree '{}' not found.", branch).deco_as_error(),
-        ));
-    }
-
-    // Get worktree path
-    let worktree_path = worktree_root.join(branch);
-    let worktree_path_str = worktree_path.to_str().unwrap();
-
-    // Check for uncommitted changes
-    if worktree_path.exists() {
-        match client::worktree_is_dirty(worktree_path_str, verbose) {
-            Ok(true) => {
-                if !force {
-                    return Err(AppError::Message(
-                        format!(
-                            "Worktree '{}' has uncommitted changes. Use --force to remove anyway.",
-                            branch
-                        )
-                        .deco_as_error(),
-                    ));
-                }
-                println!(
-                    "{}",
-                    "Warning: Removing worktree with uncommitted changes.".bright_yellow()
-                );
-            }
-            Ok(false) => {}
-            Err(e) => {
-                return Err(AppError::Message(
-                    format!("Failed to check worktree status: {:?}", e).deco_as_error(),
-                ));
-            }
+    // Dedupe, keeping the order the user gave
+    let mut names: Vec<&str> = Vec::new();
+    for branch in branches {
+        if !names.contains(&branch.as_str()) {
+            names.push(branch.as_str());
         }
+    }
+
+    // Validate every name before removing anything, so a single bad name cannot
+    // leave the batch half-applied.
+    let mut targets: Vec<CleanTarget> = Vec::new();
+    let mut problems: Vec<String> = Vec::new();
+
+    for name in names {
+        match inspect_clean_target(name, &worktree_root, &metadata, force, verbose) {
+            Ok(target) => targets.push(target),
+            Err(problem) => problems.push(problem),
+        }
+    }
+
+    if !problems.is_empty() {
+        return Err(AppError::Message(problems.join("\n")));
     }
 
     // Change to bare repo for git operations
@@ -701,62 +742,85 @@ fn run_clean(
         ));
     }
 
-    // Remove worktree
-    println!("Removing worktree '{}'...", branch.bright_cyan());
-    if let Err(e) = client::worktree_remove(worktree_path_str, force, verbose) {
-        let _ = std::env::set_current_dir(&original_dir);
-        return Err(AppError::Message(
-            format!("Failed to remove worktree: {:?}", e).deco_as_error(),
-        ));
+    let mut removed_count = 0;
+    let mut failed: Vec<&str> = Vec::new();
+
+    for target in &targets {
+        let worktree_path = worktree_root.join(target.name);
+        let worktree_path_str = worktree_path.to_str().unwrap();
+
+        if target.dirty {
+            println!(
+                "{}",
+                format!(
+                    "Warning: Removing worktree '{}' with uncommitted changes.",
+                    target.name
+                )
+                .bright_yellow()
+            );
+        }
+
+        println!("Removing worktree '{}'...", target.name.bright_cyan());
+        if let Err(e) = client::worktree_remove(worktree_path_str, force, verbose) {
+            eprintln!(
+                "{}",
+                format!("Failed to remove worktree '{}': {:?}", target.name, e).bright_yellow()
+            );
+            failed.push(target.name);
+            continue;
+        }
+
+        // Save as we go: an interrupt mid-batch then leaves metadata consistent
+        // with what is actually on disk. worktree_root is absolute, so this
+        // works from inside the bare repo.
+        metadata.remove_worktree(target.name);
+        if let Err(e) = metadata.save(&worktree_root) {
+            eprintln!(
+                "{}",
+                format!("Warning: Failed to update metadata: {:?}", e).bright_yellow()
+            );
+        }
+        removed_count += 1;
+
+        println!(
+            "{}",
+            format!("Removed worktree '{}'", target.name).bright_green()
+        );
+
+        if should_delete_branch(target.name, delete_branch, keep_branch) {
+            if let Err(e) = client::delete_branch(target.name, force, verbose) {
+                eprintln!(
+                    "{}",
+                    format!(
+                        "Warning: Failed to delete branch '{}': {:?}",
+                        target.name, e
+                    )
+                    .bright_yellow()
+                );
+            } else {
+                println!(
+                    "{}",
+                    format!("Deleted branch '{}'", target.name).bright_green()
+                );
+            }
+        }
     }
 
-    // Update metadata
-    metadata.remove_worktree(branch);
     let _ = std::env::set_current_dir(&original_dir);
 
-    if let Err(e) = metadata.save(&worktree_root) {
-        eprintln!(
-            "{}",
-            format!("Warning: Failed to update metadata: {:?}", e).bright_yellow()
+    if targets.len() > 1 {
+        println!(
+            "\n{}",
+            format!("Removed {} worktree(s).", removed_count).bright_green()
         );
     }
 
-    println!(
-        "{}",
-        format!("Removed worktree '{}'", branch).bright_green()
-    );
-
-    // Handle branch deletion
-    let should_delete_branch = if delete_branch {
-        true
-    } else if keep_branch {
-        false
-    } else {
-        // Prompt user
-        match YNQuestion::new(format!("Also delete branch '{}'?", branch)).ask() {
-            Ok(answer) => answer,
-            Err(_) => false,
-        }
-    };
-
-    if should_delete_branch {
-        // Change back to bare repo for branch deletion
-        if let Err(e) = std::env::set_current_dir(&bare_path) {
-            return Err(AppError::Message(
-                format!("Failed to change to bare repo directory: {}", e).deco_as_error(),
-            ));
-        }
-
-        if let Err(e) = client::delete_branch(branch, force, verbose) {
-            let _ = std::env::set_current_dir(&original_dir);
-            eprintln!(
-                "{}",
-                format!("Warning: Failed to delete branch '{}': {:?}", branch, e).bright_yellow()
-            );
-        } else {
-            let _ = std::env::set_current_dir(&original_dir);
-            println!("{}", format!("Deleted branch '{}'", branch).bright_green());
-        }
+    if !failed.is_empty() {
+        eprintln!(
+            "{}",
+            format!("Failed to remove: {}", failed.join(", ")).deco_as_error()
+        );
+        return Err(AppError::SilentFailure);
     }
     Ok(())
 }
@@ -1401,18 +1465,55 @@ mod tests {
         let args = parse_args(&["worktree", "clean", "feature-x"]).unwrap();
         match args.command {
             WorktreeCommands::Clean {
-                branch,
+                branches,
                 force,
                 delete_branch,
                 keep_branch,
             } => {
-                assert_eq!(branch, "feature-x");
+                assert_eq!(branches, vec!["feature-x"]);
                 assert!(!force);
                 assert!(!delete_branch);
                 assert!(!keep_branch);
             }
             _ => panic!("Expected Clean command"),
         }
+    }
+
+    #[test]
+    fn test_parse_clean_multiple_branches() {
+        let args = parse_args(&["worktree", "clean", "wt1", "wt2", "wt3"]).unwrap();
+        match args.command {
+            WorktreeCommands::Clean { branches, .. } => {
+                assert_eq!(branches, vec!["wt1", "wt2", "wt3"]);
+            }
+            _ => panic!("Expected Clean command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_clean_multiple_branches_after_force() {
+        let args = parse_args(&["worktree", "clean", "--force", "wt1", "wt2", "wt3"]).unwrap();
+        match args.command {
+            WorktreeCommands::Clean {
+                branches, force, ..
+            } => {
+                assert_eq!(branches, vec!["wt1", "wt2", "wt3"]);
+                assert!(force);
+            }
+            _ => panic!("Expected Clean command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_clean_missing_branch() {
+        let result = parse_args(&["worktree", "clean"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_clean_missing_branch_with_flags() {
+        let result = parse_args(&["worktree", "clean", "--force"]);
+        assert!(result.is_err());
     }
 
     #[test]
@@ -1483,12 +1584,12 @@ mod tests {
         .unwrap();
         match args.command {
             WorktreeCommands::Clean {
-                branch,
+                branches,
                 force,
                 delete_branch,
                 keep_branch,
             } => {
-                assert_eq!(branch, "feature-x");
+                assert_eq!(branches, vec!["feature-x"]);
                 assert!(force);
                 assert!(delete_branch);
                 assert!(!keep_branch);
