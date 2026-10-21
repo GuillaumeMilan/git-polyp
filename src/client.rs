@@ -172,12 +172,63 @@ pub fn cherry_pick(commit_a: &str, commit_b: &str, verbose: bool) -> Result<(), 
 }
 
 pub fn cherry_pick_continue(verbose: bool) -> Result<(), ClientError> {
+    match run_cherry_pick_continue(verbose) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            // `cherry-pick --continue` refuses to commit a resolution that became empty
+            // and has no flag to keep it. Commit it explicitly so the commit stays in the
+            // stack, then resume the cherry-pick.
+            if !is_empty_cherry_pick_pending(verbose).unwrap_or(false) {
+                return Err(error);
+            }
+            GitCommand::new(
+                vec![
+                    "commit".to_string(),
+                    "--allow-empty".to_string(),
+                    "-C".to_string(),
+                    "CHERRY_PICK_HEAD".to_string(),
+                ],
+                verbose,
+            )
+            .execute()?;
+            run_cherry_pick_continue(verbose)
+        }
+    }
+}
+
+fn run_cherry_pick_continue(verbose: bool) -> Result<(), ClientError> {
     GitCommand::new(
         vec!["cherry-pick".to_string(), "--continue".to_string()],
         verbose,
     )
     .execute()
     .map(|_| ())
+}
+
+/// A cherry-pick is paused on an empty commit when CHERRY_PICK_HEAD exists and
+/// nothing is left to stage: the index and working tree match HEAD.
+fn is_empty_cherry_pick_pending(verbose: bool) -> Result<bool, ClientError> {
+    let in_progress = GitCommand::new(
+        vec![
+            "rev-parse".to_string(),
+            "--quiet".to_string(),
+            "--verify".to_string(),
+            "CHERRY_PICK_HEAD".to_string(),
+        ],
+        verbose,
+    )
+    .execute()
+    .is_ok();
+    let tracked_changes = GitCommand::new(
+        vec![
+            "status".to_string(),
+            "--porcelain".to_string(),
+            "--untracked-files=no".to_string(),
+        ],
+        verbose,
+    )
+    .execute()?;
+    Ok(in_progress && tracked_changes.is_empty())
 }
 
 pub fn move_branche_at(commit_hash: &str, branch: &str, verbose: bool) -> Result<(), ClientError> {
@@ -898,5 +949,132 @@ mod tests {
         cleanup_temp_dir(&wt_path);
         cleanup_temp_dir(&bare_dir);
         cleanup_temp_dir(&remote_dir);
+    }
+
+    // =========================================================================
+    // cherry_pick_continue
+    // =========================================================================
+
+    /// Helper: run a git command in a specific directory and report whether it exited 0
+    fn git_succeeds(dir: &Path, args: &[&str]) -> bool {
+        Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .expect("failed to run git")
+            .status
+            .success()
+    }
+
+    /// Helper: create a repo where `feat` holds two commits ("change a" then
+    /// "add b") on top of `main`, and `main` has an "upstream change a" commit
+    /// setting a.txt to `upstream_content`.
+    /// Returns (repo_dir, first_commit, last_commit).
+    fn setup_cherry_pick_repo(upstream_content: &str) -> (PathBuf, String, String) {
+        let repo = create_temp_dir("cherry-pick");
+        git(&repo, &["init", "-b", "main"]);
+        git(&repo, &["config", "user.email", "test@test.com"]);
+        git(&repo, &["config", "user.name", "Test"]);
+        std::fs::write(repo.join("a.txt"), "base").unwrap();
+        git(&repo, &["add", "."]);
+        git(&repo, &["commit", "-m", "initial"]);
+
+        git(&repo, &["checkout", "-b", "feat"]);
+        std::fs::write(repo.join("a.txt"), "feature").unwrap();
+        git(&repo, &["commit", "-am", "change a"]);
+        let first = git(&repo, &["rev-parse", "HEAD"]);
+        std::fs::write(repo.join("b.txt"), "b").unwrap();
+        git(&repo, &["add", "."]);
+        git(&repo, &["commit", "-m", "add b"]);
+        let last = git(&repo, &["rev-parse", "HEAD"]);
+
+        git(&repo, &["checkout", "main"]);
+        std::fs::write(repo.join("a.txt"), upstream_content).unwrap();
+        git(&repo, &["commit", "-am", "upstream change a"]);
+        (repo, first, last)
+    }
+
+    #[test]
+    fn test_cherry_pick_continue_keeps_commit_resolved_to_empty() {
+        let _lock = lock_cwd();
+        let (repo, first, last) = setup_cherry_pick_repo("upstream");
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&repo).unwrap();
+
+        assert!(
+            cherry_pick(&first, &last, false).is_err(),
+            "cherry-pick should stop on the conflict"
+        );
+        // Keep the upstream content: the picked change becomes empty
+        std::fs::write(repo.join("a.txt"), "upstream").unwrap();
+        git(&repo, &["add", "a.txt"]);
+
+        let result = cherry_pick_continue(false);
+        assert!(
+            result.is_ok(),
+            "cherry_pick_continue should succeed on an empty resolution: {:?}",
+            result.err()
+        );
+        assert_eq!(
+            git(&repo, &["log", "--format=%s", "-3"]),
+            "add b\nchange a\nupstream change a",
+            "the empty commit should be kept in the sequence"
+        );
+        assert!(
+            git_succeeds(&repo, &["diff", "--quiet", "HEAD~2", "HEAD~1"]),
+            "the kept commit should be empty"
+        );
+        assert!(!repo.join(".git").join("CHERRY_PICK_HEAD").exists());
+
+        std::env::set_current_dir(&original_dir).unwrap();
+        cleanup_temp_dir(&repo);
+    }
+
+    #[test]
+    fn test_cherry_pick_continue_keeps_commit_already_applied_upstream() {
+        let _lock = lock_cwd();
+        // Upstream already has the exact content: no conflict, but the pick is empty
+        let (repo, first, last) = setup_cherry_pick_repo("feature");
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&repo).unwrap();
+
+        assert!(
+            cherry_pick(&first, &last, false).is_err(),
+            "cherry-pick should stop on the empty commit"
+        );
+        let result = cherry_pick_continue(false);
+        assert!(
+            result.is_ok(),
+            "cherry_pick_continue should succeed when the change is already applied: {:?}",
+            result.err()
+        );
+        assert_eq!(
+            git(&repo, &["log", "--format=%s", "-3"]),
+            "add b\nchange a\nupstream change a",
+        );
+
+        std::env::set_current_dir(&original_dir).unwrap();
+        cleanup_temp_dir(&repo);
+    }
+
+    #[test]
+    fn test_cherry_pick_continue_fails_while_conflicts_are_unresolved() {
+        let _lock = lock_cwd();
+        let (repo, first, last) = setup_cherry_pick_repo("upstream");
+        let original_dir = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&repo).unwrap();
+
+        assert!(cherry_pick(&first, &last, false).is_err());
+        assert!(
+            cherry_pick_continue(false).is_err(),
+            "cherry_pick_continue should not succeed while the conflict is unresolved"
+        );
+        assert!(
+            repo.join(".git").join("CHERRY_PICK_HEAD").exists(),
+            "cherry-pick should still be in progress"
+        );
+
+        std::env::set_current_dir(&original_dir).unwrap();
+        cleanup_temp_dir(&repo);
     }
 }
